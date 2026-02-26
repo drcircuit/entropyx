@@ -26,8 +26,8 @@ public class ComparisonReporterTests
         };
 
     private static DataJsonFileEntry MakeFile(string path, double badness = 0.5, int sloc = 100,
-        double cc = 5.0, double mi = 75.0, int smHigh = 0, int smMed = 0, int smLow = 0) =>
-        new(path, "CSharp", sloc, cc, mi, smHigh, smMed, smLow, badness);
+        double cc = 5.0, double mi = 75.0, int smHigh = 0, int smMed = 0, int smLow = 0, double coupling = 0) =>
+        new(path, "CSharp", sloc, cc, mi, smHigh, smMed, smLow, coupling, badness);
 
     // ── DataJsonReport.Parse ──────────────────────────────────────────────────
 
@@ -96,6 +96,55 @@ public class ComparisonReporterTests
         var json = """{ "commitCount": 2, "history": [], "latestFiles": [] }""";
         var report = DataJsonReport.Parse(json);
         Assert.Null(report.Summary);
+    }
+
+    [Fact]
+    public void Parse_WithCouplingProxy_ParsesCouplingProxy()
+    {
+        var json = """
+            {
+              "generated": "2024-06-01T12:00:00+00:00",
+              "commitCount": 1,
+              "history": [],
+              "latestFiles": [
+                {
+                  "path": "src/Bar.cs", "language": "CSharp", "sloc": 100,
+                  "cyclomaticComplexity": 5.0, "maintainabilityIndex": 70.0,
+                  "smellsHigh": 0, "smellsMedium": 0, "smellsLow": 0,
+                  "couplingProxy": 14.0, "badness": 0.3
+                }
+              ]
+            }
+            """;
+
+        var report = DataJsonReport.Parse(json);
+
+        Assert.Single(report.LatestFiles);
+        Assert.Equal(14.0, report.LatestFiles[0].CouplingProxy);
+    }
+
+    [Fact]
+    public void Parse_MissingCouplingProxy_DefaultsToZero()
+    {
+        var json = """
+            {
+              "generated": "2024-06-01T12:00:00+00:00",
+              "commitCount": 1,
+              "history": [],
+              "latestFiles": [
+                {
+                  "path": "src/Old.cs", "language": "CSharp", "sloc": 50,
+                  "cyclomaticComplexity": 2.0, "maintainabilityIndex": 80.0,
+                  "smellsHigh": 0, "smellsMedium": 0, "smellsLow": 0, "badness": 0.1
+                }
+              ]
+            }
+            """;
+
+        var report = DataJsonReport.Parse(json);
+
+        Assert.Single(report.LatestFiles);
+        Assert.Equal(0.0, report.LatestFiles[0].CouplingProxy);
     }
 
     // ── BuildAssessment – weather forecast verdicts ───────────────────────────

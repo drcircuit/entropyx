@@ -523,7 +523,7 @@ static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRep
     var db = new DatabaseContext();
     db.Initialize(dbPath);
     return (new ConsoleReporter(), new CommitRepository(db), new FileMetricsRepository(db),
-            new RepoMetricsRepository(db), new ScanPipeline(), new GitTraversal(), db);
+            new RepoMetricsRepository(db), new ScanPipeline(new LizardAnalyzer()), new GitTraversal(), db);
 }
 
 static void RunGitScan(
