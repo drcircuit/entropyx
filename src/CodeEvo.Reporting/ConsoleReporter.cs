@@ -6,17 +6,59 @@ namespace CodeEvo.Reporting;
 
 public class ConsoleReporter
 {
-    private static readonly Color[] CcColors =
+    // Shared gradient: green (simple/short) → maroon (complex/long)
+    private static readonly Color[] SizeGradient =
         [Color.Green, Color.GreenYellow, Color.Yellow, Color.Orange1, Color.OrangeRed1,
          Color.Red, Color.Red1, Color.Red3, Color.DarkRed, Color.Maroon];
-
-    private static readonly Color[] SmellColors =
-        [Color.Red, Color.Red1, Color.OrangeRed1, Color.Orange1, Color.Yellow,
-         Color.Yellow1, Color.Gold1, Color.DarkOrange, Color.DarkRed, Color.Maroon];
 
     private static readonly Color[] TrendColors =
         [Color.Magenta1, Color.MediumOrchid, Color.MediumOrchid1, Color.Purple,
          Color.BlueViolet, Color.DarkMagenta, Color.DeepPink1, Color.DeepPink3, Color.HotPink, Color.Plum1];
+
+    // Absolute SLOC thresholds: <50, <100, <150, <200, <300, <400, <500, <750, <1000, ≥1000
+    private static Color SlocColor(int sloc) => sloc switch
+    {
+        < 50   => SizeGradient[0],
+        < 100  => SizeGradient[1],
+        < 150  => SizeGradient[2],
+        < 200  => SizeGradient[3],
+        < 300  => SizeGradient[4],
+        < 400  => SizeGradient[5],
+        < 500  => SizeGradient[6],
+        < 750  => SizeGradient[7],
+        < 1000 => SizeGradient[8],
+        _      => SizeGradient[9],
+    };
+
+    // Absolute CC thresholds (industry standard: 1-5 simple, 6-10 moderate, 11-20 complex, 21-50 very complex, >50 untestable)
+    private static Color CcColor(double cc) => cc switch
+    {
+        < 5  => SizeGradient[0],
+        < 10 => SizeGradient[1],
+        < 15 => SizeGradient[2],
+        < 20 => SizeGradient[3],
+        < 25 => SizeGradient[4],
+        < 30 => SizeGradient[5],
+        < 40 => SizeGradient[6],
+        < 50 => SizeGradient[7],
+        < 75 => SizeGradient[8],
+        _    => SizeGradient[9],
+    };
+
+    // Absolute weighted-smells thresholds
+    private static Color SmellColor(int score) => score switch
+    {
+        < 2  => SizeGradient[0],
+        < 5  => SizeGradient[1],
+        < 8  => SizeGradient[2],
+        < 12 => SizeGradient[3],
+        < 16 => SizeGradient[4],
+        < 20 => SizeGradient[5],
+        < 25 => SizeGradient[6],
+        < 30 => SizeGradient[7],
+        < 40 => SizeGradient[8],
+        _    => SizeGradient[9],
+    };
 
     public void ReportCommit(CommitInfo commit, RepoMetrics repoMetrics)
     {
@@ -123,7 +165,8 @@ public class ConsoleReporter
             var f = top[i];
             var barLabel = Path.GetFileName(f.Path);
             double value = hasCc ? Math.Round(f.CyclomaticComplexity, 1) : f.Sloc;
-            chart.AddItem(barLabel, value, CcColors[i % CcColors.Length]);
+            var color = hasCc ? CcColor(f.CyclomaticComplexity) : SlocColor(f.Sloc);
+            chart.AddItem(barLabel, value, color);
         }
 
         AnsiConsole.WriteLine();
@@ -147,7 +190,10 @@ public class ConsoleReporter
             .CenterLabel();
 
         for (int i = 0; i < top.Count; i++)
-            chart.AddItem(Path.GetFileName(top[i].Path), WeightedSmells(top[i]), SmellColors[i % SmellColors.Length]);
+        {
+            int score = WeightedSmells(top[i]);
+            chart.AddItem(Path.GetFileName(top[i].Path), score, SmellColor(score));
+        }
 
         AnsiConsole.WriteLine();
         AnsiConsole.Write(chart);
