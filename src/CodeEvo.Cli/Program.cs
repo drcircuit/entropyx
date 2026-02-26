@@ -52,7 +52,10 @@ scanHereCommand.SetHandler((string path, string? include) =>
         ? files.Where(f => f.Language.Length > 0).ToList()
         : (IReadOnlyList<FileMetrics>)files;
     reporter.ReportFileMetrics(display);
-    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc));
+    var entropy = EntropyCalculator.ComputeEntropy(display);
+    reporter.ReportScanChart(display);
+    reporter.ReportSmellsChart(display);
+    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), entropy);
 }, scanHerePathArg, scanHereIncludeOption);
 
 // scan head [repoPath] [--db]
@@ -147,12 +150,14 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
         return;
     }
 
-    foreach (var rm in allMetrics)
-    {
-        if (commitHash is not null && !rm.CommitHash.StartsWith(commitHash, StringComparison.OrdinalIgnoreCase))
-            continue;
-        Console.WriteLine($"Commit: {rm.CommitHash[..Math.Min(8, rm.CommitHash.Length)]}  Files: {rm.TotalFiles}  SLOC: {rm.TotalSloc}  Entropy: {rm.EntropyScore:F4}");
-    }
+    var filtered = allMetrics
+        .Where(rm => commitHash is null || rm.CommitHash.StartsWith(commitHash, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    foreach (var rm in filtered)
+        reporter.ReportRepoMetrics(rm);
+
+    reporter.ReportEntropyTrend(filtered);
 
     await Task.CompletedTask;
 }, reportRepoArg, reportDbOption, reportCommitOption);
