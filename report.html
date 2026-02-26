@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EntropyX Code Health Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --border: #2d3044;
+      --text: #e0e0e0; --muted: #888; --accent: #7c6af7;
+      --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
+      --font: 'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    h1 { font-size: 2rem; font-weight: 700; }
+    h2 { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; }
+    h3 { font-size: 1rem; font-weight: 600; color: var(--muted); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: .05em; }
+    header { padding: 2rem 2.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    header .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 2rem 2.5rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .stat { text-align: center; }
+    .stat .value { font-size: 2.5rem; font-weight: 700; color: var(--accent); }
+    .stat .label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .chart-wrap { position: relative; height: 260px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 0.5rem 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); word-break: break-all; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge-red { background: rgba(239,68,68,.15); color: var(--red); }
+    .badge-green { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge-yellow { background: rgba(245,158,11,.15); color: var(--yellow); }
+    .badge-gray { background: rgba(136,136,136,.15); color: var(--muted); }
+    .delta-pos { color: var(--red); }
+    .delta-neg { color: var(--green); }
+    .delta-zero { color: var(--muted); }
+    section { margin-bottom: 2.5rem; }
+    .empty-msg { color: var(--muted); font-style: italic; padding: 1rem 0; }
+    .commit-hash { font-family: monospace; font-size: 12px; color: var(--muted); }
+    .section-title { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    footer { padding: 1.5rem 2.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>  <header>
+    <div>
+      <h1>⚡ EntropyX Report</h1>
+      <div class="subtitle">Generated 2026-02-26 12:34 UTC &nbsp;·&nbsp; 33 commit(s) analysed</div>
+    </div>
+  </header>
+  <div class="container">
+    <section>
+      <div class="grid-3">
+        <div class="card stat"><div class="value">1.5948</div><div class="label">Current Entropy</div></div>
+        <div class="card stat"><div class="value">7</div><div class="label">Total Files</div></div>
+        <div class="card stat"><div class="value">1,071</div><div class="label">Total SLOC</div></div>
+      </div>
+    </section>
+    <section>
+      <div class="chart-card">
+        <h2>Entropy Over Time</h2>
+        <div class="chart-wrap"><canvas id="entropyChart"></canvas></div>
+      </div>
+    </section>
+    <script>
+    (function() {
+      var ctx = document.getElementById('entropyChart').getContext('2d');
+      var gradient = ctx.createLinearGradient(0, 0, 0, 260);
+      gradient.addColorStop(0, 'rgba(124,106,247,0.4)');
+      gradient.addColorStop(1, 'rgba(124,106,247,0.02)');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ["2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26"],
+          datasets: [{
+            label: 'Entropy Score',
+            data: [0.000000,0.000000,1.571153,1.332938,1.297793,1.513319,1.377444,1.543805,0.000000,0.000000,1.163669,1.167790,0.000000,1.451252,1.465173,1.377444,1.163669,1.358943,0.000000,1.562760,1.562760,0.000000,0.000000,1.377444,1.377444,0.000000,1.580872,0.000000,1.537498,0.000000,1.377444,1.537933,1.594813],
+            borderColor: '#7c6af7',
+            backgroundColor: gradient,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#888' } } },
+          scales: {
+            x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#2d3044' } },
+            y: { ticks: { color: '#888' }, grid: { color: '#2d3044' }, beginAtZero: true }
+          }
+        }
+      });
+    })();
+    </script>
+    <section>
+      <div class="grid-2">
+        <div class="chart-card">
+          <h2>SLOC Over Time</h2>
+          <div class="chart-wrap"><canvas id="slocChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h2>File Count Over Time</h2>
+          <div class="chart-wrap"><canvas id="filesChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+    <script>
+    (function() {
+      function mkChart(id, label, data, color) {
+        var ctx = document.getElementById(id).getContext('2d');
+        var g = ctx.createLinearGradient(0, 0, 0, 260);
+        g.addColorStop(0, color.replace('1)', '0.35)'));
+        g.addColorStop(1, color.replace('1)', '0.02)'));
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ["2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26","2026-02-26"],
+            datasets: [{ label: label, data: data, borderColor: color.replace('1)', '1)').replace('rgba', 'rgb'), backgroundColor: g, borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#888' } } },
+            scales: {
+              x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#2d3044' } },
+              y: { ticks: { color: '#888' }, grid: { color: '#2d3044' }, beginAtZero: true }
+            }
+          }
+        });
+      }
+      mkChart('slocChart', 'SLOC', [2,0,901,79,449,334,194,1235,0,17,238,255,0,413,580,105,56,832,0,501,501,0,0,374,395,0,896,155,1291,195,446,1294,1071], 'rgba(34,197,94,1)');
+      mkChart('filesChart', 'Files', [1,0,27,6,5,3,2,28,0,1,5,6,0,5,5,2,5,14,0,5,5,0,0,2,2,0,7,1,7,1,2,7,7], 'rgba(245,158,11,1)');
+    })();
+    </script>
+    <section>
+      <div class="section-title">⚠ Issues (Latest Commit)</div>
+      <div class="card" style="margin-bottom:1.5rem">
+        <h2>🗂 Large Files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Language</th><th>SLOC</th><th>MI</th><th>Status</th></tr></thead>
+          <tbody>
+        <tr>
+          <td>src/CodeEvo.Cli/Program.cs</td>
+          <td>CSharp</td>
+          <td>326</td>
+          <td>0.0</td>
+          <td><span class="badge badge-yellow">Large</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/ConsoleReporter.cs</td>
+          <td>CSharp</td>
+          <td>250</td>
+          <td>0.0</td>
+          <td><span class="badge badge-yellow">Large</span></td>
+        </tr>
+        <tr>
+          <td>README.md</td>
+          <td></td>
+          <td>230</td>
+          <td>0.0</td>
+          <td><span class="badge badge-yellow">Large</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/HeatmapTests.cs</td>
+          <td>CSharp</td>
+          <td>118</td>
+          <td>0.0</td>
+          <td><span class="badge badge-gray">Medium</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/HeatmapImageGenerator.cs</td>
+          <td>CSharp</td>
+          <td>111</td>
+          <td>0.0</td>
+          <td><span class="badge badge-gray">Medium</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/CodeEvo.Tests.csproj</td>
+          <td></td>
+          <td>23</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Small</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/CodeEvo.Reporting.csproj</td>
+          <td></td>
+          <td>13</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Small</span></td>
+        </tr>
+      </tbody></table>
+  </div>
+      <div class="card" style="margin-bottom:1.5rem">
+        <h2>🔀 High Complexity Areas</h2>
+        <table>
+          <thead><tr><th>File</th><th>Language</th><th>Avg CC</th><th>MI</th><th>Status</th></tr></thead>
+          <tbody>
+        <tr>
+          <td>README.md</td>
+          <td></td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Cli/Program.cs</td>
+          <td>CSharp</td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/CodeEvo.Reporting.csproj</td>
+          <td></td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/ConsoleReporter.cs</td>
+          <td>CSharp</td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/HeatmapImageGenerator.cs</td>
+          <td>CSharp</td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/CodeEvo.Tests.csproj</td>
+          <td></td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/HeatmapTests.cs</td>
+          <td>CSharp</td>
+          <td>0.0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Good</span></td>
+        </tr>
+      </tbody></table>
+  </div>
+      <div class="card" style="margin-bottom:1.5rem">
+        <h2>🦨 Smelly Areas</h2>
+        <table>
+          <thead><tr><th>File</th><th>Language</th><th>Smells H/M/L</th><th>MI</th><th>Status</th></tr></thead>
+          <tbody>
+        <tr>
+          <td>README.md</td>
+          <td></td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Cli/Program.cs</td>
+          <td>CSharp</td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/CodeEvo.Reporting.csproj</td>
+          <td></td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/ConsoleReporter.cs</td>
+          <td>CSharp</td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>src/CodeEvo.Reporting/HeatmapImageGenerator.cs</td>
+          <td>CSharp</td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/CodeEvo.Tests.csproj</td>
+          <td></td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+        <tr>
+          <td>tests/CodeEvo.Tests/HeatmapTests.cs</td>
+          <td>CSharp</td>
+          <td>0/0/0</td>
+          <td>0.0</td>
+          <td><span class="badge badge-green">Clean</span></td>
+        </tr>
+      </tbody></table>
+  </div>
+</section>
+    <section>
+      <div class="card">
+        <h2>😈 Troubled Commits</h2>
+        <p style="color:var(--muted);margin-bottom:1rem;font-size:13px">Commits that significantly worsened codebase entropy.</p>
+        <table>
+          <thead><tr><th>Commit</th><th>Date</th><th>Entropy</th><th>Delta</th><th>Δ%</th></tr></thead>
+          <tbody>
+        <tr>
+          <td class="commit-hash">a03b2d30</td>
+          <td>2026-02-26</td>
+          <td>1.5809</td>
+          <td class="delta-pos">+1.5809</td>
+          <td class="delta-pos">0%</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">34527009</td>
+          <td>2026-02-26</td>
+          <td>1.5712</td>
+          <td class="delta-pos">+1.5712</td>
+          <td class="delta-pos">0%</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">286fca90</td>
+          <td>2026-02-26</td>
+          <td>1.5628</td>
+          <td class="delta-pos">+1.5628</td>
+          <td class="delta-pos">0%</td>
+        </tr>
+      </tbody></table>
+  </div></section>
+    <section>
+      <div class="card">
+        <h2>🦸 Heroic Commits</h2>
+        <p style="color:var(--muted);margin-bottom:1rem;font-size:13px">Commits that significantly improved codebase entropy.</p>
+        <table>
+          <thead><tr><th>Commit</th><th>Date</th><th>Entropy</th><th>Delta</th><th>Δ%</th></tr></thead>
+          <tbody>
+        <tr>
+          <td class="commit-hash">5f52acd0</td>
+          <td>2026-02-26</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5809</td>
+          <td class="delta-neg">-100.0000%</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">b34d7dfc</td>
+          <td>2026-02-26</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5628</td>
+          <td class="delta-neg">-100.0000%</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">173e5fe4</td>
+          <td>2026-02-26</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5438</td>
+          <td class="delta-neg">-100.0000%</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">abb8bec1</td>
+          <td>2026-02-26</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5375</td>
+          <td class="delta-neg">-100.0000%</td>
+        </tr>
+      </tbody></table>
+  </div></section>
+    <section>
+      <div class="card">
+        <h2>📋 Commit History</h2>
+        <table>
+          <thead><tr><th>Commit</th><th>Date</th><th>Files</th><th>SLOC</th><th>Entropy</th><th>Delta</th></tr></thead>
+          <tbody>
+        <tr>
+          <td class="commit-hash">d07c3876</td>
+          <td>2026-02-26</td>
+          <td>7</td>
+          <td>1,071</td>
+          <td>1.5948</td>
+          <td class="delta-pos">+0.0569</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">028e65cf</td>
+          <td>2026-02-26</td>
+          <td>7</td>
+          <td>1,294</td>
+          <td>1.5379</td>
+          <td class="delta-pos">+0.1605</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">485691de</td>
+          <td>2026-02-26</td>
+          <td>2</td>
+          <td>446</td>
+          <td>1.3774</td>
+          <td class="delta-pos">+1.3774</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">abb8bec1</td>
+          <td>2026-02-26</td>
+          <td>1</td>
+          <td>195</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5375</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">ce44513a</td>
+          <td>2026-02-26</td>
+          <td>7</td>
+          <td>1,291</td>
+          <td>1.5375</td>
+          <td class="delta-pos">+1.5375</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">5f52acd0</td>
+          <td>2026-02-26</td>
+          <td>1</td>
+          <td>155</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5809</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">a03b2d30</td>
+          <td>2026-02-26</td>
+          <td>7</td>
+          <td>896</td>
+          <td>1.5809</td>
+          <td class="delta-pos">+1.5809</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">b1b6f6ff</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.3774</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">d9ba7e92</td>
+          <td>2026-02-26</td>
+          <td>2</td>
+          <td>395</td>
+          <td>1.3774</td>
+          <td class="delta-zero">0</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">fba8ee96</td>
+          <td>2026-02-26</td>
+          <td>2</td>
+          <td>374</td>
+          <td>1.3774</td>
+          <td class="delta-pos">+1.3774</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">fafa0dbb</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-zero">0</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">b34d7dfc</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5628</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">96c85631</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>501</td>
+          <td>1.5628</td>
+          <td class="delta-zero">0</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">286fca90</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>501</td>
+          <td>1.5628</td>
+          <td class="delta-pos">+1.5628</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">d77416ec</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.3589</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">cece6427</td>
+          <td>2026-02-26</td>
+          <td>14</td>
+          <td>832</td>
+          <td>1.3589</td>
+          <td class="delta-pos">+0.1953</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">8700577c</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>56</td>
+          <td>1.1637</td>
+          <td class="delta-neg">-0.2138</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">1eebf539</td>
+          <td>2026-02-26</td>
+          <td>2</td>
+          <td>105</td>
+          <td>1.3774</td>
+          <td class="delta-neg">-0.0877</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">dc97e1f7</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>580</td>
+          <td>1.4652</td>
+          <td class="delta-pos">+0.0139</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">482761ea</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>413</td>
+          <td>1.4513</td>
+          <td class="delta-pos">+1.4513</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">d22725a1</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.1678</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">5043b49a</td>
+          <td>2026-02-26</td>
+          <td>6</td>
+          <td>255</td>
+          <td>1.1678</td>
+          <td class="delta-pos">+0.0041</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">479d9f69</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>238</td>
+          <td>1.1637</td>
+          <td class="delta-pos">+1.1637</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">b5a94e4a</td>
+          <td>2026-02-26</td>
+          <td>1</td>
+          <td>17</td>
+          <td>0.0000</td>
+          <td class="delta-zero">0</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">173e5fe4</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-neg">-1.5438</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">16f7526c</td>
+          <td>2026-02-26</td>
+          <td>28</td>
+          <td>1,235</td>
+          <td>1.5438</td>
+          <td class="delta-pos">+0.1664</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">3a210583</td>
+          <td>2026-02-26</td>
+          <td>2</td>
+          <td>194</td>
+          <td>1.3774</td>
+          <td class="delta-neg">-0.1359</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">262ace9c</td>
+          <td>2026-02-26</td>
+          <td>3</td>
+          <td>334</td>
+          <td>1.5133</td>
+          <td class="delta-pos">+0.2155</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">9a5f67aa</td>
+          <td>2026-02-26</td>
+          <td>5</td>
+          <td>449</td>
+          <td>1.2978</td>
+          <td class="delta-neg">-0.0351</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">e3739afa</td>
+          <td>2026-02-26</td>
+          <td>6</td>
+          <td>79</td>
+          <td>1.3329</td>
+          <td class="delta-neg">-0.2382</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">34527009</td>
+          <td>2026-02-26</td>
+          <td>27</td>
+          <td>901</td>
+          <td>1.5712</td>
+          <td class="delta-pos">+1.5712</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">cd2d350a</td>
+          <td>2026-02-26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0.0000</td>
+          <td class="delta-zero">0</td>
+        </tr>
+        <tr>
+          <td class="commit-hash">e94ad454</td>
+          <td>2026-02-26</td>
+          <td>1</td>
+          <td>2</td>
+          <td>0.0000</td>
+          <td class="delta-zero">0</td>
+        </tr>
+      </tbody></table></div></section>
+  </div>
+  <footer>Generated by <strong>EntropyX</strong> — <a href="https://github.com/drcircuit/entropyx">github.com/drcircuit/entropyx</a></footer>
+</body>
+</html>
