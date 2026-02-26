@@ -253,13 +253,8 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
 
     double[] badness = EntropyCalculator.ComputeBadness(display);
     reporter.ReportHeatmap(display, badness);
-<<<<<<< HEAD
-    var entropy = EntropyCalculator.ComputeEntropy(display);
-    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), entropy);
-=======
     var heatmapEntropy = EntropyCalculator.ComputeEntropy(display);
     reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), heatmapEntropy);
->>>>>>> c940d1ddfec7d0e3361d613e8b06038e46523a50
 
     if (output is not null)
     {
