@@ -44,4 +44,17 @@ public class DatabaseContext
     }
 
     public SqliteConnection OpenConnection() => new(_connectionString);
+
+    public void Clear()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            DELETE FROM FileMetrics;
+            DELETE FROM RepoMetrics;
+            DELETE FROM Commits;
+            """;
+        cmd.ExecuteNonQuery();
+    }
 }

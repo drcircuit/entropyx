@@ -266,11 +266,35 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
     }
 }, heatmapPathArg, heatmapOutputOpt, heatmapIncludeOpt);
 
+// ── db command group ──────────────────────────────────────────────────────────
+var dbCommand = new Command("db", "Database management commands");
+
+var dbClearDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
+var dbClearCommand = new Command("clear", "Clear all scanned data from the database");
+dbClearCommand.AddOption(dbClearDbOption);
+dbClearCommand.SetHandler((string dbPath) =>
+{
+    AnsiConsole.MarkupLine($"[yellow]Warning:[/] This will erase [bold]all[/] scanned data in [cyan]{Markup.Escape(dbPath)}[/].");
+    if (!AnsiConsole.Confirm("Are you sure you want to clear the database?", defaultValue: false))
+    {
+        AnsiConsole.MarkupLine("[grey]Aborted. No data was changed.[/]");
+        return;
+    }
+
+    var db = new DatabaseContext();
+    db.Initialize(dbPath);
+    db.Clear();
+    AnsiConsole.MarkupLine("[green]✓[/] Database cleared.");
+}, dbClearDbOption);
+
+dbCommand.AddCommand(dbClearCommand);
+
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
 rootCommand.AddCommand(reportCommand);
 rootCommand.AddCommand(toolsCommand);
 rootCommand.AddCommand(heatmapCommand);
+rootCommand.AddCommand(dbCommand);
 
 return await rootCommand.InvokeAsync(args);
 
