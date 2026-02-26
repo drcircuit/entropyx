@@ -107,8 +107,10 @@ scanCommand.AddCommand(scanChkCommand);
 
 // ── check command group ───────────────────────────────────────────────────────
 var checkCommand = new Command("check", "Check system requirements");
+var checkToolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
 var checkToolsCommand = new Command("tools", "Verify external tool availability and show install instructions");
-checkToolsCommand.SetHandler(CheckTools);
+checkToolsCommand.AddArgument(checkToolsPathArg);
+checkToolsCommand.SetHandler((string path) => CheckTools(path), checkToolsPathArg);
 checkCommand.AddCommand(checkToolsCommand);
 
 // ── report subcommand ─────────────────────────────────────────────────────────
@@ -146,8 +148,10 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
 }, reportRepoArg, reportDbOption, reportCommitOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
+var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
 var toolsCommand = new Command("tools", "Check availability of external tools");
-toolsCommand.SetHandler(CheckTools);
+toolsCommand.AddArgument(toolsPathArg);
+toolsCommand.SetHandler((string path) => CheckTools(path), toolsPathArg);
 
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
@@ -203,18 +207,48 @@ static void RunGitScan(GitTraversal traversal, ScanPipeline pipeline, CommitRepo
     }
 }
 
-static void CheckTools()
+static void CheckTools(string path)
 {
     var procurement = new ToolProcurement();
     var reporter = new ConsoleReporter();
     string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows"
         : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : "linux";
 
-    string[] tools = ["git", "cloc"];
-    foreach (var tool in tools)
+    List<string> detectedLanguages;
+    if (!Directory.Exists(path))
+    {
+        Console.Error.WriteLine($"Warning: path '{path}' does not exist.");
+        detectedLanguages = [];
+    }
+    else
+    {
+        detectedLanguages = Directory.EnumerateFiles(path, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true
+            })
+            .Select(f => LanguageDetector.Detect(f))
+            .Where(lang => lang.Length > 0)
+            .Distinct()
+            .OrderBy(lang => lang)
+            .ToList();
+    }
+
+    reporter.ReportDetectedLanguages(detectedLanguages);
+
+    var requiredTools = detectedLanguages
+        .SelectMany(lang => procurement.GetRequiredToolsForLanguage(lang))
+        .Distinct()
+        .OrderBy(t => t)
+        .ToList();
+
+    if (requiredTools.Count == 0)
+        requiredTools = ["cloc", "git"];
+
+    foreach (var tool in requiredTools)
     {
         if (procurement.CheckTool(tool))
-            Console.WriteLine($"✓ {tool} is available");
+            reporter.ReportToolAvailable(tool);
         else
         {
             var instructions = procurement.GetInstallInstructions(tool, platform);

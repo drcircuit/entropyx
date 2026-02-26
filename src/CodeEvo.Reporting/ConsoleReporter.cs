@@ -44,10 +44,26 @@ public class ConsoleReporter
         AnsiConsole.Write(table);
     }
 
+    public void ReportToolAvailable(string toolName)
+    {
+        AnsiConsole.MarkupLine($"[green]✓[/] {Markup.Escape(toolName)} is available");
+    }
+
     public void ReportToolMissing(string toolName, string installInstructions)
     {
         AnsiConsole.MarkupLine($"[bold yellow]WARNING:[/] Tool [red]{Markup.Escape(toolName)}[/] is not available.");
         AnsiConsole.MarkupLine($"  Install with: [cyan]{Markup.Escape(installInstructions)}[/]");
+    }
+
+    public void ReportDetectedLanguages(IEnumerable<string> languages)
+    {
+        var langList = languages.ToList();
+        if (langList.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No recognized source languages detected.[/]");
+            return;
+        }
+        AnsiConsole.MarkupLine($"[bold]Detected languages:[/] [green]{string.Join(", ", langList.Select(Markup.Escape))}[/]");
     }
 
     public void ReportLanguageScan(IEnumerable<(string Path, string Language)> results)
