@@ -266,11 +266,66 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
     }
 }, heatmapPathArg, heatmapOutputOpt, heatmapIncludeOpt);
 
+// ── compare command ───────────────────────────────────────────────────────────
+var compareBaselineArg = new Argument<string>("baseline", "Path to the baseline data.json file");
+var compareCurrentArg  = new Argument<string>("current",  "Path to the current data.json file");
+var compareHtmlOption  = new Option<string?>("--html", () => null, "Write a rich HTML comparison report to this file");
+
+var compareCommand = new Command("compare", "Compare two data.json snapshots for evolutionary assessment");
+compareCommand.AddArgument(compareBaselineArg);
+compareCommand.AddArgument(compareCurrentArg);
+compareCommand.AddOption(compareHtmlOption);
+
+compareCommand.SetHandler(async (string baselinePath, string currentPath, string? htmlPath) =>
+{
+    if (!File.Exists(baselinePath))
+    {
+        AnsiConsole.MarkupLine($"[red]Baseline file not found:[/] {Markup.Escape(baselinePath)}");
+        return;
+    }
+    if (!File.Exists(currentPath))
+    {
+        AnsiConsole.MarkupLine($"[red]Current file not found:[/] {Markup.Escape(currentPath)}");
+        return;
+    }
+
+    DataJsonReport baseline;
+    DataJsonReport current;
+    try
+    {
+        baseline = DataJsonReport.Parse(File.ReadAllText(baselinePath));
+        current  = DataJsonReport.Parse(File.ReadAllText(currentPath));
+    }
+    catch (Exception ex)
+    {
+        AnsiConsole.MarkupLine($"[red]Failed to parse data.json:[/] {Markup.Escape(ex.Message)}");
+        return;
+    }
+
+    var comparisonReporter = new ComparisonReporter();
+    comparisonReporter.ReportToConsole(baseline, current);
+
+    if (htmlPath is not null)
+    {
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start("Generating HTML comparison report...", _ =>
+            {
+                var html = comparisonReporter.GenerateHtml(baseline, current);
+                File.WriteAllText(htmlPath, html);
+            });
+        AnsiConsole.MarkupLine($"[green]✓[/] HTML comparison report written to [cyan]{Markup.Escape(htmlPath)}[/]");
+    }
+
+    await Task.CompletedTask;
+}, compareBaselineArg, compareCurrentArg, compareHtmlOption);
+
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
 rootCommand.AddCommand(reportCommand);
 rootCommand.AddCommand(toolsCommand);
 rootCommand.AddCommand(heatmapCommand);
+rootCommand.AddCommand(compareCommand);
 
 return await rootCommand.InvokeAsync(args);
 
