@@ -20,7 +20,8 @@ public record DataJsonFileEntry(
     int SmellsHigh,
     int SmellsMedium,
     int SmellsLow,
-    double Badness);
+    double Badness,
+    string Kind = "Production");
 
 /// <summary>Represents a parsed data.json snapshot produced by <c>report --html</c>.</summary>
 public class DataJsonReport
@@ -74,7 +75,8 @@ public class DataJsonReport
                     lf.TryGetProperty("smellsHigh",            out var sh) ? sh.GetInt32()       : 0,
                     lf.TryGetProperty("smellsMedium",          out var sm) ? sm.GetInt32()       : 0,
                     lf.TryGetProperty("smellsLow",             out var slo)? slo.GetInt32()      : 0,
-                    lf.TryGetProperty("badness",               out var b)  ? b.GetDouble()       : 0));
+                    lf.TryGetProperty("badness",               out var b)  ? b.GetDouble()       : 0,
+                    lf.TryGetProperty("kind",                  out var ki) ? ki.GetString() ?? "Production" : "Production"));
             }
         }
 
@@ -735,7 +737,7 @@ public class ComparisonReporter
                       borderColor: '#60a5fa',
                       backgroundColor: 'rgba(96,165,250,.1)',
                       borderWidth: 2,
-                      pointRadius: 0,
+                      pointRadius: bData.length <= 1 ? 5 : 0,
                       tension: 0.3,
                       parsing: false
                     },
@@ -745,7 +747,7 @@ public class ComparisonReporter
                       borderColor: '#f97316',
                       backgroundColor: 'rgba(249,115,22,.1)',
                       borderWidth: 2,
-                      pointRadius: 0,
+                      pointRadius: cData.length <= 1 ? 5 : 0,
                       tension: 0.3,
                       parsing: false
                     }

@@ -947,7 +947,8 @@ public class HtmlReporter
                     smellsHigh = x.First.SmellsHigh,
                     smellsMedium = x.First.SmellsMedium,
                     smellsLow = x.First.SmellsLow,
-                    badness = x.Second
+                    badness = x.Second,
+                    kind = x.First.Kind.ToString()
                 }).ToList()
         };
 

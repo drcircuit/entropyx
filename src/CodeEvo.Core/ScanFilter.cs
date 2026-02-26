@@ -36,6 +36,53 @@ public static class ScanFilter
         return parts.Length > 1 && parts[..^1].Any(p => DefaultIgnoredDirectories.Contains(p));
     }
 
+    /// <summary>
+    /// Reads glob patterns from a <c>.utilityfiles</c> file in <paramref name="rootPath"/>.
+    /// Any file whose path matches one of these patterns is classified as
+    /// <see cref="CodeEvo.Core.Models.CodeKind.Utility"/> rather than
+    /// <see cref="CodeEvo.Core.Models.CodeKind.Production"/>.
+    /// Lines beginning with <c>#</c> and blank lines are ignored.
+    /// Returns an empty array when the file does not exist.
+    /// </summary>
+    public static string[] LoadUtilityPatterns(string rootPath)
+    {
+        var utilityPath = Path.Combine(rootPath, ".utilityfiles");
+        if (!File.Exists(utilityPath))
+            return [];
+        return File.ReadAllLines(utilityPath)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns <see cref="CodeEvo.Core.Models.CodeKind.Utility"/> when
+    /// <paramref name="filePath"/> matches any pattern in <paramref name="utilityPatterns"/>,
+    /// and <see cref="CodeEvo.Core.Models.CodeKind.Production"/> otherwise.
+    /// </summary>
+    public static CodeEvo.Core.Models.CodeKind ClassifyCodeKind(
+        string filePath, string rootPath, string[] utilityPatterns)
+    {
+        return MatchesAnyPattern(filePath, rootPath, utilityPatterns)
+            ? CodeEvo.Core.Models.CodeKind.Utility
+            : CodeEvo.Core.Models.CodeKind.Production;
+    }
+
+    /// <summary>Returns true when any segment of <paramref name="filePath"/> (directory component or
+    /// file name) matches at least one pattern from <paramref name="patterns"/>.</summary>
+    private static bool MatchesAnyPattern(string filePath, string rootPath, string[] patterns)
+    {
+        if (patterns.Length == 0)
+            return false;
+        var relative = Path.IsPathRooted(filePath)
+            ? Path.GetRelativePath(rootPath, filePath)
+            : filePath;
+        var parts = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        return parts.Any(part => patterns.Any(pattern => MatchGlob(part, pattern)));
+    }
+
     /// <summary>Reads exclusion patterns from a <c>.exignore</c> file in <paramref name="rootPath"/>.
     /// Lines beginning with <c>#</c> and blank lines are ignored.
     /// Returns an empty array when the file does not exist.</summary>

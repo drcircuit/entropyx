@@ -31,6 +31,7 @@ public class DatabaseContext
                 SmellsLow INTEGER NOT NULL,
                 CouplingProxy REAL NOT NULL,
                 MaintainabilityProxy REAL NOT NULL,
+                Kind TEXT NOT NULL DEFAULT 'Production',
                 PRIMARY KEY (CommitHash, Path)
             );
             CREATE TABLE IF NOT EXISTS RepoMetrics (
@@ -45,6 +46,19 @@ public class DatabaseContext
             );
             """;
         cmd.ExecuteNonQuery();
+
+        // Migration: add Kind column to existing databases that predate this feature.
+        try
+        {
+            using var migCmd = connection.CreateCommand();
+            migCmd.CommandText = "ALTER TABLE FileMetrics ADD COLUMN Kind TEXT NOT NULL DEFAULT 'Production'";
+            migCmd.ExecuteNonQuery();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+            when (ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+        {
+            // Column already exists – migration not required.
+        }
     }
 
     public void RegisterRepo(string name, string remoteUrl)
