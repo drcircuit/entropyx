@@ -1014,4 +1014,66 @@ public class HtmlReporterTests
                 Directory.Delete(outputDir, recursive: true);
         }
     }
+
+    [Fact]
+    public void ExportSvgFigures_SlocSeriesMatchesHtmlChartSeries()
+    {
+        var reporter = new HtmlReporter();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = Enumerable.Range(0, 520)
+                .Select(i =>
+                {
+                    var sloc = i == 260 ? 50_000 : 100 + i;
+                    return (
+                        new CommitInfo($"c{i}", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero).AddDays(i), []),
+                        new RepoMetrics($"c{i}", 10 + i, sloc, 0.5 + i * 0.001));
+                })
+                .ToList();
+
+            var html = reporter.Generate(history, []);
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+
+            const string htmlStart = "mkChart('slocChart', 'SLOC', [";
+            var htmlDataStart = html.IndexOf(htmlStart, StringComparison.Ordinal);
+            Assert.True(htmlDataStart >= 0, "SLOC chart dataset not found in HTML");
+            htmlDataStart += htmlStart.Length;
+            const string htmlEnd = "], 'rgba(34,197,94,1)');";
+            var htmlDataEnd = html.IndexOf(htmlEnd, htmlDataStart, StringComparison.Ordinal);
+            Assert.True(htmlDataEnd > htmlDataStart, "SLOC chart dataset end not found in HTML");
+            var htmlValues = html[htmlDataStart..htmlDataEnd]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(v => int.Parse(v, CultureInfo.InvariantCulture))
+                .ToList();
+
+            const string svgMarker = "<polyline points=\"";
+            var svgPointsStart = svg.IndexOf(svgMarker, StringComparison.Ordinal);
+            Assert.True(svgPointsStart >= 0, "SVG polyline points not found");
+            svgPointsStart += svgMarker.Length;
+            var svgPointsEnd = svg.IndexOf("\"", svgPointsStart, StringComparison.Ordinal);
+            Assert.True(svgPointsEnd > svgPointsStart, "SVG polyline points end not found");
+            var svgPoints = svg[svgPointsStart..svgPointsEnd]
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+
+            Assert.Equal(htmlValues.Count, svgPoints.Count);
+
+            var htmlPeakIndex = htmlValues.IndexOf(htmlValues.Max());
+            var svgPeakIndex = svgPoints
+                .Select((point, index) => (Y: double.Parse(point.Split(',')[1], CultureInfo.InvariantCulture), Index: index))
+                .OrderBy(p => p.Y)
+                .First()
+                .Index;
+
+            Assert.Equal(htmlPeakIndex, svgPeakIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
 }
