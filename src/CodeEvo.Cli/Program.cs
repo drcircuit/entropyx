@@ -202,9 +202,16 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
                 var htmlReporter = new HtmlReporter();
                 var html = htmlReporter.Generate(history, latestFiles);
                 File.WriteAllText(htmlPath, html);
+
+                // Write data.json alongside the HTML for later comparison
+                var jsonPath = Path.ChangeExtension(htmlPath, ".json");
+                var json = HtmlReporter.GenerateDataJson(history, latestFiles);
+                File.WriteAllText(jsonPath, json);
             });
 
         AnsiConsole.MarkupLine($"[green]✓[/] HTML report written to [cyan]{Markup.Escape(htmlPath)}[/]");
+        var jsonOutputPath = Path.ChangeExtension(htmlPath, ".json");
+        AnsiConsole.MarkupLine($"[green]✓[/] Data JSON written to [cyan]{Markup.Escape(jsonOutputPath)}[/]");
     }
 
     await Task.CompletedTask;
@@ -246,7 +253,8 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
 
     double[] badness = EntropyCalculator.ComputeBadness(display);
     reporter.ReportHeatmap(display, badness);
-    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc));
+    var heatmapEntropy = EntropyCalculator.ComputeEntropy(display);
+    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), heatmapEntropy);
 
     if (output is not null)
     {
