@@ -202,6 +202,124 @@ public class ConsoleReporter
     private static int WeightedSmells(FileMetrics f) =>
         f.SmellsHigh * 3 + f.SmellsMedium * 2 + f.SmellsLow;
 
+    /// <summary>Renders a SLOC-per-language summary table sorted by total SLOC descending.</summary>
+    public void ReportSlocByLanguage(IReadOnlyList<FileMetrics> files)
+    {
+        var byLang = files
+            .Where(f => f.Language.Length > 0)
+            .GroupBy(f => f.Language)
+            .Select(g => (Language: g.Key, FileCount: g.Count(), TotalSloc: g.Sum(f => f.Sloc)))
+            .OrderByDescending(x => x.TotalSloc)
+            .ToList();
+
+        if (byLang.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No source language files detected.[/]");
+            return;
+        }
+
+        int grandTotal = byLang.Sum(x => x.TotalSloc);
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("Language");
+        table.AddColumn(new TableColumn("Files").RightAligned());
+        table.AddColumn(new TableColumn("SLOC").RightAligned());
+        table.AddColumn(new TableColumn("%").RightAligned());
+
+        foreach (var (lang, count, sloc) in byLang)
+        {
+            double pct = grandTotal > 0 ? sloc * 100.0 / grandTotal : 0;
+            table.AddRow(
+                Markup.Escape(lang),
+                count.ToString(),
+                sloc.ToString("N0"),
+                $"{pct:F1}%");
+        }
+
+        AnsiConsole.MarkupLine("\n[bold]SLOC by Language[/]");
+        AnsiConsole.Write(table);
+    }
+
+    /// <summary>Renders a summary of notable commits (troubled / heroic) from stored history.</summary>
+    public void ReportNotableEvents(
+        IReadOnlyList<HtmlReporter.CommitDelta> troubled,
+        IReadOnlyList<HtmlReporter.CommitDelta> heroic)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold]Notable Events[/]");
+
+        if (troubled.Count == 0 && heroic.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No notable events detected in stored history.[/]");
+            return;
+        }
+
+        if (troubled.Count > 0)
+        {
+            AnsiConsole.MarkupLine("[bold red]😈 Troubled Commits (entropy spikes):[/]");
+            foreach (var d in troubled.Take(5))
+            {
+                var hash = d.Commit.Hash[..Math.Min(8, d.Commit.Hash.Length)];
+                AnsiConsole.MarkupLine(
+                    $"  [yellow]{Markup.Escape(hash)}[/]  " +
+                    $"[grey]{d.Commit.Timestamp:yyyy-MM-dd}[/]  " +
+                    $"Entropy: [magenta]{d.Metrics.EntropyScore:F4}[/]  " +
+                    $"Δ [red]+{d.Delta:F4}[/]");
+            }
+        }
+
+        if (heroic.Count > 0)
+        {
+            AnsiConsole.MarkupLine("[bold green]🦸 Heroic Commits (entropy drops):[/]");
+            foreach (var d in heroic.Take(5))
+            {
+                var hash = d.Commit.Hash[..Math.Min(8, d.Commit.Hash.Length)];
+                AnsiConsole.MarkupLine(
+                    $"  [yellow]{Markup.Escape(hash)}[/]  " +
+                    $"[grey]{d.Commit.Timestamp:yyyy-MM-dd}[/]  " +
+                    $"Entropy: [magenta]{d.Metrics.EntropyScore:F4}[/]  " +
+                    $"Δ [green]{d.Delta:F4}[/]");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renders a health assessment for the scanned commit, including a grade, entropy score,
+    /// textual description, and optional trend vs the previous commit.
+    /// </summary>
+    public void ReportAssessment(RepoMetrics current, RepoMetrics? previous)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold]Assessment[/]");
+
+        var (grade, gradeColor, description) = current.EntropyScore switch
+        {
+            < 0.3 => ("Excellent", Color.Green,    "Codebase is in excellent health. Entropy is very low."),
+            < 0.7 => ("Good",      Color.GreenYellow, "Codebase is in good health. Some minor areas could be improved."),
+            < 1.2 => ("Fair",      Color.Yellow,   "Codebase health is fair. Technical debt is accumulating."),
+            < 2.0 => ("Poor",      Color.OrangeRed1, "Codebase health is poor. Significant refactoring is recommended."),
+            _     => ("Critical",  Color.Red,      "Codebase health is critical. Immediate attention required.")
+        };
+
+        AnsiConsole.MarkupLine($"  Health Grade:   [{gradeColor}]{grade}[/]");
+        AnsiConsole.MarkupLine($"  Entropy Score:  [magenta]{current.EntropyScore:F4}[/]");
+        AnsiConsole.MarkupLine($"  Files / SLOC:   [green]{current.TotalFiles}[/] / [green]{current.TotalSloc:N0}[/]");
+        AnsiConsole.MarkupLine($"  {description}");
+
+        if (previous is not null)
+        {
+            double delta = current.EntropyScore - previous.EntropyScore;
+            var (trend, trendColor) = delta switch
+            {
+                > 0.02  => ("⬆ Worsening", "red"),
+                < -0.02 => ("⬇ Improving", "green"),
+                _       => ("→ Stable",    "grey")
+            };
+            string deltaStr = delta > 1e-9 ? $"+{delta:F4}" : delta < -1e-9 ? $"{delta:F4}" : "0.0000";
+            AnsiConsole.MarkupLine($"  Trend:          [{trendColor}]{trend}[/]  " +
+                                   $"(Δ Entropy: [grey]{Markup.Escape(deltaStr)}[/])");
+        }
+    }
+
     public void ReportRepoMetrics(RepoMetrics repoMetrics)
     {
         AnsiConsole.MarkupLine($"[bold cyan]Commit:[/] [yellow]{repoMetrics.CommitHash[..Math.Min(8, repoMetrics.CommitHash.Length)]}[/]  " +

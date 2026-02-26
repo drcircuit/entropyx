@@ -442,4 +442,155 @@ public class HtmlReporterTests
         Assert.Contains("\"sloc\": 300", json);
         Assert.Contains("\"files\": 2", json);
     }
+
+    // ── GenerateDrilldown ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateDrilldown_EmptyFiles_ReturnsValidHtml()
+    {
+        var reporter = new HtmlReporter();
+        var commit = MakeCommit("abc123");
+        var metrics = MakeRepoMetrics("abc123", 0.5);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("<!DOCTYPE html>", html);
+        Assert.Contains("EntropyX Drilldown", html);
+        Assert.Contains("abc123", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_ContainsAssessmentSection()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("def456");
+        var metrics = MakeRepoMetrics("def456", 0.8);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("Assessment", html);
+        Assert.Contains("0.8000", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_GradeExcellent_WhenEntropyBelowThreshold()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("aaa");
+        var metrics = MakeRepoMetrics("aaa", 0.1);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("Excellent", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_GradeCritical_WhenEntropyVeryHigh()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("bbb");
+        var metrics = MakeRepoMetrics("bbb", 3.5);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("Critical", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_ContainsLanguageChart_WhenFilesPresent()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("ccc");
+        var metrics = MakeRepoMetrics("ccc", 0.5);
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/A.cs",  sloc: 200),
+            MakeFileMetrics("src/B.ts",  sloc: 100),
+        };
+        // Override language field to simulate different languages
+        files = [
+            new FileMetrics("ccc", "src/A.cs",  "CSharp",     200, 3.0, 80.0, 0, 0, 0, 0, 0),
+            new FileMetrics("ccc", "src/B.ts",  "TypeScript",  100, 2.0, 85.0, 0, 0, 0, 0, 0),
+        ];
+
+        var html = reporter.GenerateDrilldown(commit, metrics, files, [], null);
+
+        Assert.Contains("SLOC by Language", html);
+        Assert.Contains("langChart", html);
+        Assert.Contains("CSharp", html);
+        Assert.Contains("TypeScript", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_ContainsFileMetricsTable()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("ddd");
+        var metrics = MakeRepoMetrics("ddd", 0.6);
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/Program.cs", sloc: 300, cc: 12.0, smellsHigh: 1),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, files, [], null);
+
+        Assert.Contains("File Metrics", html);
+        Assert.Contains("src/Program.cs", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_ShowsDeltaVsPreviousCommit()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("eee");
+        var metrics = MakeRepoMetrics("eee", 1.2, files: 10, sloc: 500);
+        var prev    = MakeRepoMetrics("ddd", 0.8, files:  8, sloc: 400);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], prev);
+
+        // Delta SLOC: +100, should appear in stat cards
+        Assert.Contains("+100", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_ShowsTroubledAndHeroicSections_WithHistory()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("zzz");
+        var metrics = MakeRepoMetrics("zzz", 0.5);
+
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 6), MakeRepoMetrics("a", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("b", 5), MakeRepoMetrics("b", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("c", 4), MakeRepoMetrics("c", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("d", 3), MakeRepoMetrics("d", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("e", 2), MakeRepoMetrics("e", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("f", 1), MakeRepoMetrics("f", 5.0, files: 10, sloc: 500)),  // spike
+            (MakeCommit("g", 0), MakeRepoMetrics("g", 5.0, files: 10, sloc: 500)),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], history, null);
+
+        Assert.Contains("Troubled Commits", html);
+        Assert.Contains("Heroic Commits", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_EscapesHtmlInFilePaths()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("fff");
+        var metrics = MakeRepoMetrics("fff", 0.5);
+        var files = new List<FileMetrics>
+        {
+            new("fff", "src/<xss>.cs", "CSharp", 50, 2.0, 80.0, 0, 0, 0, 0, 0),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, files, [], null);
+
+        // The unescaped element name must not appear as an HTML tag anywhere in the document
+        Assert.DoesNotContain("<xss>", html);
+        Assert.Contains("&lt;xss&gt;", html);
+    }
 }

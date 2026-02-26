@@ -32,6 +32,257 @@ public class HtmlReporter
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
 
+    /// <summary>
+    /// Generates a rich HTML drilldown report for a single commit showing per-language SLOC,
+    /// per-file metrics, the commit's effect on the repo, notable events, and a health assessment.
+    /// </summary>
+    /// <param name="commit">The commit being inspected.</param>
+    /// <param name="metrics">Repo-level metrics for this commit.</param>
+    /// <param name="files">File-level metrics for this commit.</param>
+    /// <param name="history">Full stored history (oldest first) used for context; may be empty.</param>
+    /// <param name="previousMetrics">Metrics for the immediately preceding commit, if known.</param>
+    public string GenerateDrilldown(
+        CommitInfo commit,
+        RepoMetrics metrics,
+        IReadOnlyList<FileMetrics> files,
+        IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
+        RepoMetrics? previousMetrics)
+    {
+        var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
+        var deltas = ComputeDeltas(ordered);
+        var (troubled, heroic) = ClassifyCommits(deltas);
+        double[] badness = files.Count > 0 ? EntropyCalculator.ComputeBadness(files) : [];
+
+        var sb = new StringBuilder();
+        var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+        AppendHtmlHeader(sb, reportDate);
+        AppendDrilldownHeader(sb, commit, metrics, reportDate);
+        AppendDrilldownSummaryStats(sb, metrics, previousMetrics);
+        AppendDrilldownAssessment(sb, metrics, previousMetrics);
+        AppendDrilldownLanguageChart(sb, files);
+        AppendHeatmapSection(sb, files, badness);
+        AppendDrilldownFileTable(sb, files, badness);
+        AppendTroubledSection(sb, troubled);
+        AppendHeroicSection(sb, heroic);
+        AppendHtmlFooter(sb);
+
+        return sb.ToString();
+    }
+
+    private static void AppendDrilldownHeader(StringBuilder sb, CommitInfo commit, RepoMetrics metrics, string reportDate)
+    {
+        var hash = commit.Hash[..Math.Min(8, commit.Hash.Length)];
+        var date = commit.Timestamp != DateTimeOffset.MinValue
+            ? commit.Timestamp.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)
+            : "unknown";
+        string badge = EntropyBadgeSvg(metrics.EntropyScore);
+        sb.AppendLine($$"""
+              <header>
+                <div>
+                  <h1>⚡ EntropyX Drilldown</h1>
+                  <div class="subtitle">Commit <code style="color:var(--accent)">{{EscapeHtml(hash)}}</code> &nbsp;·&nbsp; {{EscapeHtml(date)}} &nbsp;·&nbsp; Generated {{reportDate}}</div>
+                </div>
+                <div>{{badge}}</div>
+              </header>
+              <div class="container">
+            """);
+    }
+
+    private static void AppendDrilldownSummaryStats(StringBuilder sb, RepoMetrics metrics, RepoMetrics? previous)
+    {
+        string entropy  = metrics.EntropyScore.ToString("F4", CultureInfo.InvariantCulture);
+        string files    = metrics.TotalFiles.ToString(CultureInfo.InvariantCulture);
+        string sloc     = metrics.TotalSloc.ToString("N0", CultureInfo.InvariantCulture);
+
+        string deltaEntropy = previous is null ? "" : FormatDeltaHtml(metrics.EntropyScore - previous.EntropyScore);
+        string deltaSloc    = previous is null ? "" : FormatDeltaHtml(metrics.TotalSloc - previous.TotalSloc, isInteger: true);
+        string deltaFiles   = previous is null ? "" : FormatDeltaHtml(metrics.TotalFiles - previous.TotalFiles, isInteger: true);
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="grid-3">
+                    <div class="card stat">
+                      <div class="value">{{entropy}}</div>
+                      <div class="label">Entropy Score {{deltaEntropy}}</div>
+                    </div>
+                    <div class="card stat">
+                      <div class="value">{{files}}</div>
+                      <div class="label">Total Files {{deltaFiles}}</div>
+                    </div>
+                    <div class="card stat">
+                      <div class="value">{{sloc}}</div>
+                      <div class="label">Total SLOC {{deltaSloc}}</div>
+                    </div>
+                  </div>
+                </section>
+            """);
+    }
+
+    private static string FormatDeltaHtml(double delta, bool isInteger = false)
+    {
+        if (Math.Abs(delta) < 1e-9) return "";
+        string sign = delta > 0 ? "+" : "";
+        string val = isInteger
+            ? $"{sign}{(int)delta:N0}"
+            : $"{sign}{delta.ToString("F4", CultureInfo.InvariantCulture)}";
+        string cls = delta > 0 ? "delta-pos" : "delta-neg";
+        return $"<span class=\"{cls}\" style=\"font-size:0.65rem\">{EscapeHtml(val)}</span>";
+    }
+
+    private static void AppendDrilldownAssessment(StringBuilder sb, RepoMetrics metrics, RepoMetrics? previous)
+    {
+        double e = metrics.EntropyScore;
+        var (grade, color, description) = e switch
+        {
+            < 0.3 => ("Excellent", "#22c55e", "Entropy is very low – the codebase is in excellent shape."),
+            < 0.7 => ("Good",      "#86efac", "Entropy is low – only minor areas could be improved."),
+            < 1.2 => ("Fair",      "#f59e0b", "Entropy is moderate – technical debt is accumulating."),
+            < 2.0 => ("Poor",      "#f97316", "Entropy is high – significant refactoring is recommended."),
+            _     => ("Critical",  "#ef4444", "Entropy is very high – immediate attention required.")
+        };
+
+        string trend = "";
+        if (previous is not null)
+        {
+            double delta = metrics.EntropyScore - previous.EntropyScore;
+            trend = delta switch
+            {
+                > 0.02  => $"<span class=\"delta-pos\">⬆ Worsening (Δ {delta:+F4})</span>",
+                < -0.02 => $"<span class=\"delta-neg\">⬇ Improving (Δ {delta:F4})</span>",
+                _       => "<span class=\"delta-zero\">→ Stable</span>"
+            };
+        }
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="card">
+                    <h2>📊 Assessment</h2>
+                    <p style="font-size:1.1rem;margin-bottom:0.5rem">
+                      Health Grade: <strong style="color:{{color}}">{{EscapeHtml(grade)}}</strong>
+                      {{(trend.Length > 0 ? $"&nbsp;·&nbsp; {trend}" : "")}}
+                    </p>
+                    <p style="color:var(--muted)">{{EscapeHtml(description)}}</p>
+                  </div>
+                </section>
+            """);
+    }
+
+    private static void AppendDrilldownLanguageChart(StringBuilder sb, IReadOnlyList<FileMetrics> files)
+    {
+        var byLang = files
+            .Where(f => f.Language.Length > 0)
+            .GroupBy(f => f.Language)
+            .Select(g => (Language: g.Key, FileCount: g.Count(), TotalSloc: g.Sum(f => f.Sloc)))
+            .OrderByDescending(x => x.TotalSloc)
+            .ToList();
+
+        if (byLang.Count == 0) return;
+
+        int grandTotal = byLang.Sum(x => x.TotalSloc);
+        var colors = new[] { "#7c6af7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#a855f7", "#f97316", "#64748b" };
+        var chartLabels = string.Join(",", byLang.Select(x => JsonString(x.Language)));
+        var chartData   = string.Join(",", byLang.Select(x => x.TotalSloc.ToString(CultureInfo.InvariantCulture)));
+        var chartColors = string.Join(",", byLang.Select((_, i) => JsonString(colors[i % colors.Length])));
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="grid-2">
+                    <div class="chart-card">
+                      <h2>🌐 SLOC by Language</h2>
+                      <div class="chart-wrap"><canvas id="langChart"></canvas></div>
+                    </div>
+                    <div class="card">
+                      <h2>📋 Language Breakdown</h2>
+                      <table>
+                        <thead><tr><th>Language</th><th style="text-align:right">Files</th><th style="text-align:right">SLOC</th><th style="text-align:right">Share</th></tr></thead>
+                        <tbody>
+            """);
+
+        foreach (var (lang, count, sloc) in byLang)
+        {
+            double pct = grandTotal > 0 ? sloc * 100.0 / grandTotal : 0;
+            sb.AppendLine($$"""
+                          <tr>
+                            <td>{{EscapeHtml(lang)}}</td>
+                            <td style="text-align:right">{{count}}</td>
+                            <td style="text-align:right">{{sloc.ToString("N0", CultureInfo.InvariantCulture)}}</td>
+                            <td style="text-align:right">{{pct.ToString("F1", CultureInfo.InvariantCulture)}}%</td>
+                          </tr>
+                """);
+        }
+
+        sb.AppendLine($$"""
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+                <script>
+                (function() {
+                  var ctx = document.getElementById('langChart').getContext('2d');
+                  new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                      labels: [{{chartLabels}}],
+                      datasets: [{ data: [{{chartData}}], backgroundColor: [{{chartColors}}], borderWidth: 2, borderColor: '#0f1117' }]
+                    },
+                    options: {
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'right', labels: { color: '#e0e0e0', font: { size: 12 } } },
+                        tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.raw.toLocaleString() + ' SLOC'; } } }
+                      }
+                    }
+                  });
+                })();
+                </script>
+            """);
+    }
+
+    private static void AppendDrilldownFileTable(StringBuilder sb, IReadOnlyList<FileMetrics> files, double[] badness)
+    {
+        if (files.Count == 0) return;
+
+        double maxBadness = badness.Length > 0 ? Math.Max(badness.Max(), double.Epsilon) : 1.0;
+
+        var sorted = files.Zip(badness.Length > 0 ? badness : new double[files.Count])
+            .OrderByDescending(x => x.Second)
+            .ToList();
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="card">
+                    <h2>📁 File Metrics</h2>
+                    <details open>
+                      <summary>All {{files.Count}} file(s) sorted by badness <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th style="text-align:right">SLOC</th><th style="text-align:right">CC</th><th style="text-align:right">MI</th><th style="text-align:right">Smells H/M/L</th><th style="text-align:right">Badness</th></tr></thead>
+                          <tbody>
+            """);
+
+        foreach (var (file, b) in sorted)
+        {
+            float t = (float)(b / maxBadness);
+            string color = HeatColorHtml(t);
+            string slocBadge = SlocBadge(file.Sloc);
+            sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(file.Path)}}</td>
+                              <td>{{EscapeHtml(file.Language.Length > 0 ? file.Language : "—")}}</td>
+                              <td style="text-align:right">{{file.Sloc.ToString("N0", CultureInfo.InvariantCulture)}} {{slocBadge}}</td>
+                              <td style="text-align:right">{{file.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture)}} {{CcBadge(file.CyclomaticComplexity)}}</td>
+                              <td style="text-align:right">{{file.MaintainabilityIndex.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td style="text-align:right">{{file.SmellsHigh}}/{{file.SmellsMedium}}/{{file.SmellsLow}} {{SmellBadge(file.SmellsHigh, file.SmellsMedium, file.SmellsLow)}}</td>
+                              <td style="text-align:right"><span style="color:{{color}}">{{b.ToString("F3", CultureInfo.InvariantCulture)}}</span></td>
+                            </tr>
+                """);
+        }
+
+        sb.AppendLine("          </tbody></table></div></details></div></section>");
+    }
+
     public static IReadOnlyList<CommitDelta> ComputeDeltas(
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> ordered)
     {
