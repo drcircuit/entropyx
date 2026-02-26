@@ -15,9 +15,8 @@ public class ScanPipeline
 
     public (IReadOnlyList<FileMetrics> Files, RepoMetrics Repo) ScanCommit(CommitInfo commit, string repoPath)
     {
-        var allFiles = _git.GetAllFilesAtCommit(repoPath, commit.Hash).ToList();
         var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(repoPath);
-        var changedFiles = _git.GetChangedFiles(repoPath, commit.Hash)
+        var allFiles = _git.GetAllFilesAtCommit(repoPath, commit.Hash)
             .Where(f => !ScanFilter.IsExIgnored(f, repoPath, exIgnorePatterns))
             .ToList();
         var fileMetrics = new List<FileMetrics>();

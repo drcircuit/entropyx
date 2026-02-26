@@ -146,6 +146,11 @@ public class ScanFilterTests
     [InlineData("generated/Foo.cs", "generated")] // directory segment match
     [InlineData("src/generated/Bar.cs", "generated")] // nested directory segment
     [InlineData("src/Foo.min.js", "*.min.js")]    // multi-dot extension match
+    [InlineData("editor_assets/shaderlab.ico.ico", ".ico")]   // extension-only pattern
+    [InlineData("editor_assets/fonts/Hack-Regular.ttf", ".ttf")] // extension-only pattern
+    [InlineData("CMakeLists.txt", ".txt")]         // extension-only pattern
+    [InlineData("third_party/Crinkler.exe", "third_party")] // directory prefix pattern
+    [InlineData(".gitignore", ".gitignore")]       // dot-file: suffix match (.gitignore ends with .gitignore)
     public void IsExIgnored_MatchingPattern_ReturnsTrue(string relPath, string pattern)
     {
         var root = Path.GetTempPath();
