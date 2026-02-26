@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
+using CodeEvo.Core;
 using CodeEvo.Core.Models;
 
 namespace CodeEvo.Reporting;
@@ -23,10 +25,12 @@ public class HtmlReporter
             .OrderByDescending(f => f.SmellsHigh * 3 + f.SmellsMedium * 2 + f.SmellsLow)
             .Take(TopFilesCount).ToList();
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles);
+        double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
+
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, latestFiles, badness);
     }
 
-    public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta);
+    public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
 
     public static IReadOnlyList<CommitDelta> ComputeDeltas(
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> ordered)
@@ -38,7 +42,9 @@ public class HtmlReporter
             double prev = i == 0 ? metrics.EntropyScore : ordered[i - 1].Metrics.EntropyScore;
             double delta = metrics.EntropyScore - prev;
             double relativeDelta = prev == 0 ? 0 : delta / prev;
-            result.Add(new CommitDelta(commit, metrics, delta, relativeDelta));
+            int slocDelta = i == 0 ? 0 : metrics.TotalSloc - ordered[i - 1].Metrics.TotalSloc;
+            int filesDelta = i == 0 ? 0 : metrics.TotalFiles - ordered[i - 1].Metrics.TotalFiles;
+            result.Add(new CommitDelta(commit, metrics, delta, relativeDelta, slocDelta, filesDelta));
         }
         return result;
     }
@@ -76,7 +82,9 @@ public class HtmlReporter
         IReadOnlyList<CommitDelta> heroic,
         IReadOnlyList<FileMetrics> largeFiles,
         IReadOnlyList<FileMetrics> complexFiles,
-        IReadOnlyList<FileMetrics> smellyFiles)
+        IReadOnlyList<FileMetrics> smellyFiles,
+        IReadOnlyList<FileMetrics> latestFiles,
+        double[] badness)
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
@@ -84,8 +92,10 @@ public class HtmlReporter
 
         AppendHtmlHeader(sb, reportDate);
         AppendSummarySection(sb, latest, ordered.Count, reportDate);
+        AppendGaugesSection(sb, latest, latestFiles);
         AppendEntropyChart(sb, ordered);
         AppendGrowthChart(sb, ordered);
+        AppendHeatmapSection(sb, latestFiles, badness);
         AppendIssuesSection(sb, largeFiles, complexFiles, smellyFiles);
         AppendTroubledSection(sb, troubled);
         AppendHeroicSection(sb, heroic);
@@ -130,6 +140,9 @@ public class HtmlReporter
                 .stat .label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; }
                 .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
                 .chart-wrap { position: relative; height: 260px; }
+                .gauge-wrap { position: relative; height: 160px; }
+                .gauge-label { text-align: center; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 0.5rem; }
+                .gauge-value { text-align: center; font-size: 1.4rem; font-weight: 700; color: var(--accent); margin-top: -0.5rem; }
                 table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 th { text-align: left; padding: 0.5rem 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
                 td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); word-break: break-all; }
@@ -148,6 +161,20 @@ public class HtmlReporter
                 .commit-hash { font-family: monospace; font-size: 12px; color: var(--muted); }
                 .section-title { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
                 footer { padding: 1.5rem 2.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+                /* Accordion */
+                details { margin-bottom: 1rem; }
+                details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: rgba(124,106,247,.08); border: 1px solid var(--border); border-radius: 8px; color: var(--accent); font-weight: 600; font-size: 0.9rem; user-select: none; }
+                details > summary::-webkit-details-marker { display: none; }
+                details > summary::before { content: '▶'; font-size: 0.7rem; transition: transform .2s; }
+                details[open] > summary::before { transform: rotate(90deg); }
+                details > summary .summary-meta { color: var(--muted); font-weight: 400; font-size: 0.8rem; margin-left: auto; }
+                details .details-body { padding: 1rem 0; }
+                /* Heatmap */
+                .heatmap-row { display: flex; align-items: center; margin-bottom: 3px; font-size: 12px; }
+                .heatmap-swatch { width: 56px; min-width: 56px; height: 22px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: rgba(0,0,0,.75); flex-shrink: 0; }
+                .heatmap-label { flex: 1; padding: 0 0.5rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
+                .heatmap-bar-wrap { width: 120px; min-width: 120px; background: rgba(255,255,255,.05); border-radius: 3px; height: 10px; overflow: hidden; }
+                .heatmap-bar { height: 100%; border-radius: 3px; }
               </style>
             </head>
             <body>
@@ -159,6 +186,7 @@ public class HtmlReporter
         string entropy = latest is not null ? latest.EntropyScore.ToString("F4", CultureInfo.InvariantCulture) : "—";
         string files = latest is not null ? latest.TotalFiles.ToString(CultureInfo.InvariantCulture) : "—";
         string sloc = latest is not null ? latest.TotalSloc.ToString("N0", CultureInfo.InvariantCulture) : "—";
+        string badge = latest is not null ? EntropyBadgeSvg(latest.EntropyScore) : "";
 
         sb.AppendLine($$"""
               <header>
@@ -166,6 +194,7 @@ public class HtmlReporter
                   <h1>⚡ EntropyX Report</h1>
                   <div class="subtitle">Generated {{reportDate}} &nbsp;·&nbsp; {{commitCount}} commit(s) analysed</div>
                 </div>
+                <div>{{badge}}</div>
               </header>
               <div class="container">
                 <section>
@@ -309,28 +338,37 @@ public class HtmlReporter
         sb.AppendLine("""
                   <div class="card" style="margin-bottom:1.5rem">
                     <h2>🗂 Large Files</h2>
+                    <details open>
+                      <summary>Top files by SLOC <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
             """);
         AppendFileTable(sb, largeFiles, "SLOC", f => f.Sloc.ToString(CultureInfo.InvariantCulture),
             f => SlocBadge(f.Sloc));
-        sb.AppendLine("  </div>");
+        sb.AppendLine("      </div></details></div>");
 
         // High complexity
         sb.AppendLine("""
                   <div class="card" style="margin-bottom:1.5rem">
                     <h2>🔀 High Complexity Areas</h2>
+                    <details open>
+                      <summary>Top files by Cyclomatic Complexity <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
             """);
         AppendFileTable(sb, complexFiles, "Avg CC", f => f.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture),
             f => CcBadge(f.CyclomaticComplexity));
-        sb.AppendLine("  </div>");
+        sb.AppendLine("      </div></details></div>");
 
         // Smelly
         sb.AppendLine("""
                   <div class="card" style="margin-bottom:1.5rem">
                     <h2>🦨 Smelly Areas</h2>
+                    <details open>
+                      <summary>Top files by Code Smell score <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
             """);
         AppendFileTable(sb, smellyFiles, "Smells H/M/L", f => $"{f.SmellsHigh}/{f.SmellsMedium}/{f.SmellsLow}",
             f => SmellBadge(f.SmellsHigh, f.SmellsMedium, f.SmellsLow));
-        sb.AppendLine("  </div>");
+        sb.AppendLine("      </div></details></div>");
 
         sb.AppendLine("</section>");
     }
@@ -405,7 +443,7 @@ public class HtmlReporter
     {
         sb.AppendLine("""
                     <table>
-                      <thead><tr><th>Commit</th><th>Date</th><th>Entropy</th><th>Delta</th><th>Δ%</th></tr></thead>
+                      <thead><tr><th>Commit</th><th>Date</th><th>Entropy</th><th>Δ Entropy</th><th>Δ%</th><th>Δ SLOC</th><th>Δ Files</th></tr></thead>
                       <tbody>
             """);
         foreach (var d in deltas)
@@ -415,6 +453,12 @@ public class HtmlReporter
             var entropy = d.Metrics.EntropyScore.ToString("F4", CultureInfo.InvariantCulture);
             var deltaStr = FormatDelta(d.Delta);
             var relStr = FormatDelta(d.RelativeDelta * 100, suffix: "%");
+            var slocDeltaStr = d.SlocDelta == 0 ? "<span class=\"delta-zero\">0</span>"
+                : d.SlocDelta > 0 ? $"<span class=\"delta-pos\">+{d.SlocDelta.ToString("N0", CultureInfo.InvariantCulture)}</span>"
+                : $"<span class=\"delta-neg\">{d.SlocDelta.ToString("N0", CultureInfo.InvariantCulture)}</span>";
+            var filesDeltaStr = d.FilesDelta == 0 ? "<span class=\"delta-zero\">0</span>"
+                : d.FilesDelta > 0 ? $"<span class=\"delta-pos\">+{d.FilesDelta}</span>"
+                : $"<span class=\"delta-neg\">{d.FilesDelta}</span>";
             var cls = isHeroic ? "delta-neg" : "delta-pos";
             sb.AppendLine($$"""
                         <tr>
@@ -423,6 +467,8 @@ public class HtmlReporter
                           <td>{{entropy}}</td>
                           <td class="{{cls}}">{{deltaStr}}</td>
                           <td class="{{cls}}">{{relStr}}</td>
+                          <td>{{slocDeltaStr}}</td>
+                          <td>{{filesDeltaStr}}</td>
                         </tr>
                 """);
         }
@@ -431,12 +477,15 @@ public class HtmlReporter
 
     private static void AppendCommitTableSection(StringBuilder sb, IReadOnlyList<CommitDelta> deltas)
     {
-        sb.AppendLine("""
+        sb.AppendLine($$"""
                 <section>
                   <div class="card">
                     <h2>📋 Commit History</h2>
+                    <details>
+                      <summary>All {{deltas.Count}} commit(s) <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
                     <table>
-                      <thead><tr><th>Commit</th><th>Date</th><th>Files</th><th>SLOC</th><th>Entropy</th><th>Delta</th></tr></thead>
+                      <thead><tr><th>Commit</th><th>Date</th><th>Files</th><th>SLOC</th><th>Entropy</th><th>Δ Entropy</th><th>Δ SLOC</th></tr></thead>
                       <tbody>
             """);
         foreach (var d in deltas.AsEnumerable().Reverse())
@@ -446,6 +495,10 @@ public class HtmlReporter
             var entropy = d.Metrics.EntropyScore.ToString("F4", CultureInfo.InvariantCulture);
             var deltaStr = FormatDelta(d.Delta);
             string cls = d.Delta > 0 ? "delta-pos" : d.Delta < 0 ? "delta-neg" : "delta-zero";
+            var slocDeltaStr = d.SlocDelta == 0 ? "0"
+                : d.SlocDelta > 0 ? $"+{d.SlocDelta.ToString("N0", CultureInfo.InvariantCulture)}"
+                : d.SlocDelta.ToString("N0", CultureInfo.InvariantCulture);
+            string slocCls = d.SlocDelta > 0 ? "delta-pos" : d.SlocDelta < 0 ? "delta-neg" : "delta-zero";
             sb.AppendLine($$"""
                         <tr>
                           <td class="commit-hash">{{EscapeHtml(hash)}}</td>
@@ -454,10 +507,11 @@ public class HtmlReporter
                           <td>{{d.Metrics.TotalSloc.ToString("N0", CultureInfo.InvariantCulture)}}</td>
                           <td>{{entropy}}</td>
                           <td class="{{cls}}">{{deltaStr}}</td>
+                          <td class="{{slocCls}}">{{slocDeltaStr}}</td>
                         </tr>
                 """);
         }
-        sb.AppendLine("      </tbody></table></div></section>");
+        sb.AppendLine("      </tbody></table></div></details></div></section>");
     }
 
     private static void AppendHtmlFooter(StringBuilder sb)
@@ -471,6 +525,221 @@ public class HtmlReporter
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────
+
+    private static void AppendGaugesSection(StringBuilder sb, RepoMetrics? latest, IReadOnlyList<FileMetrics> files)
+    {
+        if (latest is null) return;
+
+        double entropy = latest.EntropyScore;
+        // Normalize entropy to 0-100 on a 0-3 scale (above 3 clamped at 100)
+        double entropyPct = Math.Min(100.0, entropy / 3.0 * 100.0);
+        double entropyRemain = 100.0 - entropyPct;
+
+        double avgCc = files.Count > 0 ? files.Average(f => f.CyclomaticComplexity) : 0;
+        // Normalize avg CC: 0-20 scale → 0-100%
+        double ccPct = Math.Min(100.0, avgCc / 20.0 * 100.0);
+        double ccRemain = 100.0 - ccPct;
+
+        double avgSmells = files.Count > 0 ? files.Average(f => f.SmellsHigh * 3.0 + f.SmellsMedium * 2.0 + f.SmellsLow) : 0;
+        // Normalize avg smells: 0-15 scale → 0-100%
+        double smellsPct = Math.Min(100.0, avgSmells / 15.0 * 100.0);
+        double smellsRemain = 100.0 - smellsPct;
+
+        string entropyColor = entropyPct < 33 ? "#22c55e" : entropyPct < 66 ? "#f59e0b" : "#ef4444";
+        string ccColor = ccPct < 33 ? "#22c55e" : ccPct < 66 ? "#f59e0b" : "#ef4444";
+        string smellsColor = smellsPct < 33 ? "#22c55e" : smellsPct < 66 ? "#f59e0b" : "#ef4444";
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="grid-3">
+                    <div class="chart-card">
+                      <h2>Entropy Health</h2>
+                      <div class="gauge-wrap"><canvas id="gaugeEntropy"></canvas></div>
+                      <div class="gauge-value" style="color:{{entropyColor}}">{{entropy.ToString("F4", CultureInfo.InvariantCulture)}}</div>
+                      <div class="gauge-label">EntropyX Score</div>
+                    </div>
+                    <div class="chart-card">
+                      <h2>Complexity Health</h2>
+                      <div class="gauge-wrap"><canvas id="gaugeCc"></canvas></div>
+                      <div class="gauge-value" style="color:{{ccColor}}">{{avgCc.ToString("F2", CultureInfo.InvariantCulture)}}</div>
+                      <div class="gauge-label">Avg Cyclomatic Complexity</div>
+                    </div>
+                    <div class="chart-card">
+                      <h2>Smell Health</h2>
+                      <div class="gauge-wrap"><canvas id="gaugeSmells"></canvas></div>
+                      <div class="gauge-value" style="color:{{smellsColor}}">{{avgSmells.ToString("F1", CultureInfo.InvariantCulture)}}</div>
+                      <div class="gauge-label">Avg Weighted Smell Score</div>
+                    </div>
+                  </div>
+                </section>
+                <script>
+                (function() {
+                  function mkGauge(id, value, remaining, color) {
+                    var ctx = document.getElementById(id).getContext('2d');
+                    new Chart(ctx, {
+                      type: 'doughnut',
+                      data: {
+                        datasets: [{
+                          data: [value, remaining],
+                          backgroundColor: [color, 'rgba(255,255,255,0.07)'],
+                          borderWidth: 0,
+                          circumference: 180,
+                          rotation: 270
+                        }]
+                      },
+                      options: {
+                        cutout: '72%',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                      }
+                    });
+                  }
+                  mkGauge('gaugeEntropy',  {{entropyPct.ToString("F2", CultureInfo.InvariantCulture)}}, {{entropyRemain.ToString("F2", CultureInfo.InvariantCulture)}}, '{{entropyColor}}');
+                  mkGauge('gaugeCc',       {{ccPct.ToString("F2", CultureInfo.InvariantCulture)}}, {{ccRemain.ToString("F2", CultureInfo.InvariantCulture)}}, '{{ccColor}}');
+                  mkGauge('gaugeSmells',   {{smellsPct.ToString("F2", CultureInfo.InvariantCulture)}}, {{smellsRemain.ToString("F2", CultureInfo.InvariantCulture)}}, '{{smellsColor}}');
+                })();
+                </script>
+            """);
+    }
+
+    private static void AppendHeatmapSection(StringBuilder sb, IReadOnlyList<FileMetrics> files, double[] badness)
+    {
+        if (files.Count == 0) return;
+
+        double maxBadness = badness.Length > 0 ? badness.Max() : 1.0;
+        if (maxBadness == 0) maxBadness = 1.0;
+
+        var sorted = files.Zip(badness)
+            .OrderByDescending(x => x.Second)
+            .ToList();
+
+        sb.AppendLine("""
+                <section>
+                  <div class="card">
+                    <h2>🌡 Complexity Heatmap (Latest Commit)</h2>
+                    <details open>
+                      <summary>Files sorted by badness score <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+
+        foreach (var (file, b) in sorted)
+        {
+            float t = (float)(b / maxBadness);
+            string color = HeatColorHtml(t);
+            double barPct = b / maxBadness * 100.0;
+            string score = b.ToString("F3", CultureInfo.InvariantCulture);
+            string path = EscapeHtml(file.Path);
+            sb.AppendLine($$"""
+                        <div class="heatmap-row">
+                          <div class="heatmap-swatch" style="background:{{color}}">{{score}}</div>
+                          <div class="heatmap-label" title="{{path}}">{{path}}</div>
+                          <div class="heatmap-bar-wrap"><div class="heatmap-bar" style="width:{{barPct.ToString("F1", CultureInfo.InvariantCulture)}}%;background:{{color}}"></div></div>
+                        </div>
+                """);
+        }
+
+        sb.AppendLine("      </div></details></div></section>");
+    }
+
+    /// <summary>
+    /// Serializes the report data to a JSON string that can be saved alongside the HTML report.
+    /// The JSON can be used to compare two data points and generate a diff report.
+    /// </summary>
+    public static string GenerateDataJson(
+        IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
+        IReadOnlyList<FileMetrics> latestFiles)
+    {
+        var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
+        var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
+        double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
+
+        var data = new
+        {
+            generated = DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            commitCount = ordered.Count,
+            summary = latest is null ? null : (object)new
+            {
+                entropy = latest.EntropyScore,
+                files = latest.TotalFiles,
+                sloc = latest.TotalSloc
+            },
+            history = ordered.Select(h => new
+            {
+                hash = h.Commit.Hash,
+                date = h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                entropy = h.Metrics.EntropyScore,
+                files = h.Metrics.TotalFiles,
+                sloc = h.Metrics.TotalSloc
+            }).ToList(),
+            latestFiles = latestFiles.Zip(badness.Length > 0 ? badness : new double[latestFiles.Count])
+                .Select(x => new
+                {
+                    path = x.First.Path,
+                    language = x.First.Language,
+                    sloc = x.First.Sloc,
+                    cyclomaticComplexity = x.First.CyclomaticComplexity,
+                    maintainabilityIndex = x.First.MaintainabilityIndex,
+                    smellsHigh = x.First.SmellsHigh,
+                    smellsMedium = x.First.SmellsMedium,
+                    smellsLow = x.First.SmellsLow,
+                    badness = x.Second
+                }).ToList()
+        };
+
+        return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>Returns a shields.io-style inline SVG badge for the EntropyX score.</summary>
+    private static string EntropyBadgeSvg(double entropy)
+    {
+        string label = "EntropyX";
+        string value = entropy.ToString("F4", CultureInfo.InvariantCulture);
+        string color = entropy < 0.5 ? "#22c55e" : entropy < 1.5 ? "#f59e0b" : "#ef4444";
+        int labelWidth = 68;
+        int valueWidth = Math.Max(50, value.Length * 7 + 10);
+        int totalWidth = labelWidth + valueWidth;
+        int lx = labelWidth / 2;
+        int vx = labelWidth + valueWidth / 2;
+        return $"""<svg xmlns="http://www.w3.org/2000/svg" width="{totalWidth}" height="20"><rect width="{labelWidth}" height="20" rx="3" fill="#555"/><rect x="{labelWidth}" width="{valueWidth}" height="20" rx="3" fill="{color}"/><text x="{lx}" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11">{EscapeHtml(label)}</text><text x="{vx}" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11" font-weight="bold">{EscapeHtml(value)}</text></svg>""";
+    }
+
+    /// <summary>
+    /// Converts a normalized heat value t ∈ [0,1] to a CSS rgb() colour using
+    /// the same IR thermal palette key-stops as <see cref="HeatmapImageGenerator"/>.
+    /// </summary>
+    private static string HeatColorHtml(float t)
+    {
+        // IR palette key-stops: t → (r, g, b)
+        ReadOnlySpan<(float t, byte r, byte g, byte b)> palette =
+        [
+            (0.00f,   0,   0,   0),
+            (0.12f,  80,   0, 130),
+            (0.25f,   0,   0, 200),
+            (0.38f,   0, 200, 200),
+            (0.50f,   0, 180,   0),
+            (0.62f, 220, 220,   0),
+            (0.75f, 255, 140,   0),
+            (0.88f, 220,   0,   0),
+            (1.00f, 255, 255, 255),
+        ];
+        t = Math.Clamp(t, 0f, 1f);
+        for (int i = 1; i < palette.Length; i++)
+        {
+            var (t0, r0, g0, b0) = palette[i - 1];
+            var (t1, r1, g1, b1) = palette[i];
+            if (t > t1) continue;
+            float a = (t - t0) / (t1 - t0);
+            byte r = (byte)(r0 + (r1 - r0) * a);
+            byte g = (byte)(g0 + (g1 - g0) * a);
+            byte b = (byte)(b0 + (b1 - b0) * a);
+            return $"rgb({r},{g},{b})";
+        }
+        var last = palette[^1];
+        return $"rgb({last.r},{last.g},{last.b})";
+    }
+
+    // ── original helpers ───────────────────────────────────────────────────────
 
     private static string FormatDelta(double value, string suffix = "")
     {

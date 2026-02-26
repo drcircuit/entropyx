@@ -220,4 +220,167 @@ public class HtmlReporterTests
         Assert.Empty(troubled);
         Assert.Empty(heroic);
     }
+
+    // ── ComputeDeltas – SLOC and file deltas ──────────────────────────────────
+
+    [Fact]
+    public void ComputeDeltas_IncludesSlocAndFilesDeltas()
+    {
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 5), MakeRepoMetrics("a", 1.0, files: 3, sloc: 100)),
+            (MakeCommit("b", 0), MakeRepoMetrics("b", 1.5, files: 5, sloc: 150)),
+        };
+        var result = HtmlReporter.ComputeDeltas(history);
+        Assert.Equal(0, result[0].SlocDelta);
+        Assert.Equal(0, result[0].FilesDelta);
+        Assert.Equal(50,  result[1].SlocDelta);
+        Assert.Equal(2,   result[1].FilesDelta);
+    }
+
+    [Fact]
+    public void ComputeDeltas_DecreasingSlocAndFiles_NegativeDeltas()
+    {
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 2), MakeRepoMetrics("a", 1.0, files: 10, sloc: 500)),
+            (MakeCommit("b", 0), MakeRepoMetrics("b", 0.8, files:  7, sloc: 300)),
+        };
+        var result = HtmlReporter.ComputeDeltas(history);
+        Assert.Equal(-200, result[1].SlocDelta);
+        Assert.Equal(-3,   result[1].FilesDelta);
+    }
+
+    // ── Generate – new sections ───────────────────────────────────────────────
+
+    [Fact]
+    public void Generate_ContainsGaugeSection()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 1), MakeRepoMetrics("a", 0.8)),
+        };
+        var html = reporter.Generate(history, [MakeFileMetrics("a.cs", sloc: 100, cc: 5.0)]);
+        Assert.Contains("gaugeEntropy",  html);
+        Assert.Contains("gaugeCc",       html);
+        Assert.Contains("gaugeSmells",   html);
+        Assert.Contains("Entropy Health",    html);
+        Assert.Contains("Complexity Health", html);
+        Assert.Contains("Smell Health",      html);
+    }
+
+    [Fact]
+    public void Generate_ContainsHeatmapSection()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 1), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/A.cs", sloc: 200, cc: 10.0),
+            MakeFileMetrics("src/B.cs", sloc: 50,  cc: 2.0),
+        };
+        var html = reporter.Generate(history, files);
+        Assert.Contains("Complexity Heatmap", html);
+        Assert.Contains("heatmap-row",         html);
+    }
+
+    [Fact]
+    public void Generate_ContainsAccordions()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 1), MakeRepoMetrics("a", 0.5)),
+        };
+        var html = reporter.Generate(history, [MakeFileMetrics("a.cs")]);
+        Assert.Contains("<details", html);
+        Assert.Contains("<summary", html);
+    }
+
+    [Fact]
+    public void Generate_ContainsEntropyBadge()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 1.2345)),
+        };
+        var html = reporter.Generate(history, []);
+        Assert.Contains("EntropyX", html);
+        Assert.Contains("1.2345", html);
+    }
+
+    [Fact]
+    public void Generate_DeltaTableIncludesSlocAndFilesColumns()
+    {
+        var reporter = new HtmlReporter();
+        // Create a history with a large entropy spike so troubled commits are populated
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 6), MakeRepoMetrics("a", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("b", 5), MakeRepoMetrics("b", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("c", 4), MakeRepoMetrics("c", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("d", 3), MakeRepoMetrics("d", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("e", 2), MakeRepoMetrics("e", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("f", 1), MakeRepoMetrics("f", 5.0, files: 10, sloc: 500)),
+            (MakeCommit("g", 0), MakeRepoMetrics("g", 5.0, files: 10, sloc: 500)),
+        };
+        var html = reporter.Generate(history, []);
+        Assert.Contains("Δ SLOC", html);
+        Assert.Contains("Δ Files", html);
+    }
+
+    // ── GenerateDataJson ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateDataJson_EmptyInputs_ReturnsValidJson()
+    {
+        var json = HtmlReporter.GenerateDataJson([], []);
+        Assert.False(string.IsNullOrWhiteSpace(json));
+        // Should contain top-level keys
+        Assert.Contains("\"commitCount\"", json);
+        Assert.Contains("\"history\"", json);
+        Assert.Contains("\"latestFiles\"", json);
+    }
+
+    [Fact]
+    public void GenerateDataJson_WithHistory_ContainsCommitData()
+    {
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("abc123", 5), MakeRepoMetrics("abc123", 1.5, files: 3, sloc: 200)),
+            (MakeCommit("def456", 0), MakeRepoMetrics("def456", 2.0, files: 5, sloc: 300)),
+        };
+
+        var json = HtmlReporter.GenerateDataJson(history, []);
+
+        Assert.Contains("\"abc123\"", json);
+        Assert.Contains("\"def456\"", json);
+        Assert.Contains("\"commitCount\": 2", json);
+        Assert.Contains("\"entropy\"", json);
+        Assert.Contains("\"sloc\"", json);
+    }
+
+    [Fact]
+    public void GenerateDataJson_WithFiles_ContainsFileData()
+    {
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/Foo.cs", sloc: 150, cc: 8.0, smellsHigh: 1),
+        };
+
+        var json = HtmlReporter.GenerateDataJson(history, files);
+
+        Assert.Contains("\"src/Foo.cs\"", json);
+        Assert.Contains("\"badness\"", json);
+        Assert.Contains("\"cyclomaticComplexity\"", json);
+    }
 }
