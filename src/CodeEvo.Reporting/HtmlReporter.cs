@@ -11,9 +11,14 @@ public class HtmlReporter
     private const int TopFilesCount = 10;
     private const int MaxChartPoints = 500;
 
+    /// <summary>Per-commit aggregate file-level statistics used for CC/Smell over-time charts.</summary>
+    public record CommitFileStats(CommitInfo Commit, double AvgCc, double AvgSmell, double SlocPerFile);
+
     public string Generate(
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
-        IReadOnlyList<FileMetrics> latestFiles)
+        IReadOnlyList<FileMetrics> latestFiles,
+        IReadOnlyList<CommitFileStats>? commitStats = null,
+        IReadOnlyList<FileMetrics>? prevFiles = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -35,7 +40,7 @@ public class HtmlReporter
 
         double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness);
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles);
     }
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
@@ -525,7 +530,9 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> smellyFiles,
         IReadOnlyList<FileMetrics> coupledFiles,
         IReadOnlyList<FileMetrics> latestFiles,
-        double[] badness)
+        double[] badness,
+        IReadOnlyList<CommitFileStats>? commitStats = null,
+        IReadOnlyList<FileMetrics>? prevFiles = null)
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
@@ -533,11 +540,15 @@ public class HtmlReporter
 
         AppendHtmlHeader(sb, reportDate);
         AppendSummarySection(sb, latest, ordered.Count, reportDate);
-        AppendGaugesSection(sb, latest, latestFiles);
+        AppendGaugesSection(sb, latest, latestFiles, ordered);
         AppendEntropyChart(sb, ordered);
         AppendGrowthChart(sb, ordered);
+        if (commitStats is { Count: > 0 })
+            AppendCcSmellCharts(sb, commitStats);
         AppendHeatmapSection(sb, latestFiles, badness);
         AppendIssuesSection(sb, largeFiles, complexFiles, smellyFiles, coupledFiles);
+        if (latestFiles.Count > 0)
+            AppendDiffusionSection(sb, latestFiles, badness, prevFiles);
         AppendTroubledSection(sb, troubled);
         AppendHeroicSection(sb, heroic);
         AppendCommitTableSection(sb, deltas);
@@ -584,6 +595,9 @@ public class HtmlReporter
                 .gauge-wrap { position: relative; height: 160px; }
                 .gauge-label { text-align: center; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 0.5rem; }
                 .gauge-value { text-align: center; font-size: 1.4rem; font-weight: 700; color: var(--accent); margin-top: -0.5rem; }
+                .gauge-stats { display: flex; justify-content: center; gap: 0.75rem; margin-top: 0.6rem; flex-wrap: wrap; }
+                .gauge-stat { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+                .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
                 table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 th { text-align: left; padding: 0.5rem 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
                 td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); word-break: break-all; }
@@ -718,6 +732,11 @@ public class HtmlReporter
         var fileValues = chartData
             .Select(h => h.Metrics.TotalFiles.ToString(CultureInfo.InvariantCulture))
             .ToArray();
+        var slocPerFileValues = chartData
+            .Select(h => h.Metrics.TotalFiles > 0
+                ? ((double)h.Metrics.TotalSloc / h.Metrics.TotalFiles).ToString("F1", CultureInfo.InvariantCulture)
+                : "0")
+            .ToArray();
 
         sb.AppendLine($$"""
                 <section>
@@ -729,6 +748,12 @@ public class HtmlReporter
                     <div class="chart-card">
                       <h2>File Count Over Time</h2>
                       <div class="chart-wrap"><canvas id="filesChart"></canvas></div>
+                    </div>
+                  </div>
+                  <div class="grid-2" style="margin-top:1.5rem">
+                    <div class="chart-card">
+                      <h2>SLOC per File Over Time</h2>
+                      <div class="chart-wrap"><canvas id="slocPerFileChart"></canvas></div>
                     </div>
                   </div>
                 </section>
@@ -760,6 +785,63 @@ public class HtmlReporter
                   }
                   mkChart('slocChart', 'SLOC', [{{string.Join(",", slocValues)}}], 'rgba(34,197,94,1)');
                   mkChart('filesChart', 'Files', [{{string.Join(",", fileValues)}}], 'rgba(245,158,11,1)');
+                  mkChart('slocPerFileChart', 'SLOC / File', [{{string.Join(",", slocPerFileValues)}}], 'rgba(251,191,36,1)');
+                })();
+                </script>
+            """);
+    }
+
+    private static void AppendCcSmellCharts(StringBuilder sb, IReadOnlyList<CommitFileStats> commitStats)
+    {
+        var chartData = Downsample(commitStats, MaxChartPoints);
+        var labels = chartData
+            .Select(s => JsonString(s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .ToArray();
+        var ccValues = chartData
+            .Select(s => s.AvgCc.ToString("F2", CultureInfo.InvariantCulture))
+            .ToArray();
+        var smellValues = chartData
+            .Select(s => s.AvgSmell.ToString("F2", CultureInfo.InvariantCulture))
+            .ToArray();
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="grid-2">
+                    <div class="chart-card">
+                      <h2>Avg Cyclomatic Complexity Over Time</h2>
+                      <div class="chart-wrap"><canvas id="ccChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                      <h2>Avg Smell Score Over Time</h2>
+                      <div class="chart-wrap"><canvas id="smellChart"></canvas></div>
+                    </div>
+                  </div>
+                </section>
+                <script>
+                (function() {
+                  function mkChart2(id, label, data, color) {
+                    var ctx = document.getElementById(id).getContext('2d');
+                    var g = ctx.createLinearGradient(0, 0, 0, 260);
+                    g.addColorStop(0, color.replace('1)', '0.35)'));
+                    g.addColorStop(1, color.replace('1)', '0.02)'));
+                    new Chart(ctx, {
+                      type: 'line',
+                      data: {
+                        labels: [{{string.Join(",", labels)}}],
+                        datasets: [{ label: label, data: data, borderColor: color.replace('1)', '1)').replace('rgba', 'rgb'), backgroundColor: g, borderWidth: 2, pointRadius: {{(chartData.Count > 100 ? 0 : 3)}}, fill: true, tension: 0.3 }]
+                      },
+                      options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#888' } } },
+                        scales: {
+                          x: { ticks: { color: '#888', maxTicksLimit: 12 }, grid: { color: '#2d3044' } },
+                          y: { ticks: { color: '#888' }, grid: { color: '#2d3044' }, beginAtZero: true }
+                        }
+                      }
+                    });
+                  }
+                  mkChart2('ccChart',    'Avg Cyclomatic Complexity', [{{string.Join(",", ccValues)}}],    'rgba(239,68,68,1)');
+                  mkChart2('smellChart', 'Avg Smell Score',           [{{string.Join(",", smellValues)}}], 'rgba(168,85,247,1)');
                 })();
                 </script>
             """);
@@ -854,6 +936,214 @@ public class HtmlReporter
         }
         sb.AppendLine("      </tbody></table>");
     }
+
+    private static void AppendDiffusionSection(
+        StringBuilder sb,
+        IReadOnlyList<FileMetrics> files,
+        double[] badness,
+        IReadOnlyList<FileMetrics>? prevFiles)
+    {
+        double[] diffusion = EntropyCalculator.ComputeDiffusionContributions(badness);
+
+        // Top diffusion contributors: highest -p_i·log₂(p_i)
+        // Zip all three parallel arrays together once to avoid repeated index lookups
+        var fileStats = files
+            .Zip(badness, (f, b) => (File: f, Badness: b))
+            .Zip(diffusion, (fb, d) => (fb.File, fb.Badness, Diffusion: d))
+            .ToList();
+
+        var topDiffusion = fileStats
+            .Where(x => x.Diffusion > 0)
+            .OrderByDescending(x => x.Diffusion)
+            .Take(TopFilesCount)
+            .ToList();
+
+        // Top badness contributors: highest raw b_i
+        var topBadness = fileStats
+            .Where(x => x.Badness > 0)
+            .OrderByDescending(x => x.Badness)
+            .Take(TopFilesCount)
+            .ToList();
+
+        // Top delta contributors: largest increase in badness vs previous commit
+        // Match files by path; new files (no prev) get Δb = b_i(new)
+        List<(FileMetrics File, double Delta, double OldBadness, double NewBadness)> topDelta = [];
+        if (prevFiles is { Count: > 0 })
+        {
+            double[] prevBadness = EntropyCalculator.ComputeBadness(prevFiles);
+            var prevBadnessByPath = prevFiles.Zip(prevBadness)
+                .ToDictionary(x => x.First.Path, x => x.Second);
+
+            topDelta = files.Zip(badness)
+                .Select(x =>
+                {
+                    double oldB = prevBadnessByPath.TryGetValue(x.First.Path, out var pb) ? pb : 0.0;
+                    return (x.First, x.Second - oldB, oldB, x.Second);
+                })
+                .Where(x => x.Item2 > 1e-9)
+                .OrderByDescending(x => x.Item2)
+                .Take(TopFilesCount)
+                .ToList();
+        }
+
+        sb.AppendLine("""
+                <section>
+                  <div class="section-title">📊 Entropy Contribution Analysis</div>
+                  <p style="color:var(--muted);font-size:13px;margin-bottom:1.5rem">
+                    These three lists decompose the entropy score into per-file signals.
+                    A file can be a top diffusion spreader without being the worst in raw badness — and vice versa.
+                  </p>
+            """);
+
+        // ── Diffusion contributors ─────────────────────────────────────────────
+        sb.AppendLine("""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>🌊 Top Diffusion Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the highest <code style="color:var(--accent)">−p<sub>i</sub>·log₂(p<sub>i</sub>)</code> term.
+                      These are the <strong>entropy spreaders</strong> — files pulling complexity
+                      toward a uniform distribution and away from a single obvious hotspot.
+                    </p>
+                    <details open>
+                      <summary>Top files by diffusion contribution <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+        if (topDiffusion.Count == 0)
+        {
+            sb.AppendLine("""    <p class="empty-msg">No diffusion data available.</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Diffusion</th><th>Badness</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, b, contrib) in topDiffusion)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--accent)">{{contrib.ToString("F4", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{b.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{DiffusionBadge(contrib)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table>");
+        }
+        sb.AppendLine("      </div></details></div>");
+
+        // ── Badness contributors ───────────────────────────────────────────────
+        sb.AppendLine("""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>☠ Top Badness Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the highest raw <strong>badness score</strong> <code style="color:var(--accent)">b<sub>i</sub></code>.
+                      These are the <strong>most problematic files</strong> by combined SLOC, complexity, smells, coupling, and maintainability.
+                    </p>
+                    <details open>
+                      <summary>Top files by badness score <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+        if (topBadness.Count == 0)
+        {
+            sb.AppendLine("""    <p class="empty-msg">No badness data available.</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Badness</th><th>CC</th><th>MI</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, b, _) in topBadness)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--red)">{{b.ToString("F3", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{f.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{f.MaintainabilityIndex.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{BadnessBadge(b)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table>");
+        }
+        sb.AppendLine("      </div></details></div>");
+
+        // ── Delta contributors ─────────────────────────────────────────────────
+        sb.AppendLine($$"""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>📈 Top Delta Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the largest <strong>increase in badness</strong> since the previous commit (Δ<code style="color:var(--accent)">b<sub>i</sub></code>).
+                      {{(prevFiles is null ? "Not available — only one commit has been scanned." : "These files are driving the entropy upward.")}}
+                    </p>
+            """);
+        if (topDelta.Count == 0)
+        {
+            string msg = prevFiles is null
+                ? "Requires at least two scanned commits."
+                : "No files increased in badness since the previous commit. 🎉";
+            sb.AppendLine($"""    <p class="empty-msg">{msg}</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                    <details open>
+                      <summary>Top files by badness increase <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Δ Badness</th><th>Prev</th><th>Now</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, delta, oldB, newB) in topDelta)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--red)">+{{delta.ToString("F3", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{oldB.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{newB.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{DeltaBadge(delta)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table></div></details>");
+        }
+        sb.AppendLine("      </div>");
+
+        sb.AppendLine("</section>");
+    }
+
+    private static string DiffusionBadge(double contrib) => contrib switch
+    {
+        > 0.3 => """<span class="badge badge-red">Dominant spreader</span>""",
+        > 0.15 => """<span class="badge badge-yellow">High spread</span>""",
+        > 0.05 => """<span class="badge badge-gray">Moderate</span>""",
+        _ => """<span class="badge badge-green">Low</span>"""
+    };
+
+    private static string BadnessBadge(double b) => b switch
+    {
+        > 3.0 => """<span class="badge badge-red">Critical</span>""",
+        > 2.0 => """<span class="badge badge-yellow">High</span>""",
+        > 1.0 => """<span class="badge badge-gray">Moderate</span>""",
+        _ => """<span class="badge badge-green">Low</span>"""
+    };
+
+    private static string DeltaBadge(double delta) => delta switch
+    {
+        > 1.0 => """<span class="badge badge-red">Large regression</span>""",
+        > 0.5 => """<span class="badge badge-yellow">Regression</span>""",
+        > 0.1 => """<span class="badge badge-gray">Minor regression</span>""",
+        _ => """<span class="badge badge-green">Minimal</span>"""
+    };
 
     private static void AppendTroubledSection(StringBuilder sb, IReadOnlyList<CommitDelta> troubled)
     {
@@ -986,7 +1276,8 @@ public class HtmlReporter
 
     // ── helpers ────────────────────────────────────────────────────────────────
 
-    private static void AppendGaugesSection(StringBuilder sb, RepoMetrics? latest, IReadOnlyList<FileMetrics> files)
+    private static void AppendGaugesSection(StringBuilder sb, RepoMetrics? latest, IReadOnlyList<FileMetrics> files,
+        IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> ordered)
     {
         if (latest is null) return;
 
@@ -1009,6 +1300,30 @@ public class HtmlReporter
         string ccColor = ccPct < 33 ? "#22c55e" : ccPct < 66 ? "#f59e0b" : "#ef4444";
         string smellsColor = smellsPct < 33 ? "#22c55e" : smellsPct < 66 ? "#f59e0b" : "#ef4444";
 
+        // Historical stats for entropy gauge
+        double entropyMin = 0, entropyMean = 0, entropyMax = 0;
+        if (ordered.Count > 0)
+        {
+            var scores = ordered.Select(h => h.Metrics.EntropyScore).ToList();
+            entropyMin = scores.Min();
+            entropyMean = scores.Average();
+            entropyMax = scores.Max();
+        }
+
+        // Threshold reference values for CC and smells gauges
+        double ccLow = 20.0 * 0.33;   // ~6.6 → green/yellow boundary
+        double ccHigh = 20.0 * 0.66;  // ~13.2 → yellow/red boundary
+        double smellLow = 15.0 * 0.33;
+        double smellHigh = 15.0 * 0.66;
+
+        string entropyHistoryStats = ordered.Count > 0
+            ? $"<div class=\"gauge-stats\">" +
+              $"<span class=\"gauge-stat\"><span class=\"stat-dot\" style=\"background:#22c55e\"></span>Min: {entropyMin.ToString("F4", CultureInfo.InvariantCulture)}</span>" +
+              $"<span class=\"gauge-stat\"><span class=\"stat-dot\" style=\"background:#7c6af7\"></span>Avg: {entropyMean.ToString("F4", CultureInfo.InvariantCulture)}</span>" +
+              $"<span class=\"gauge-stat\"><span class=\"stat-dot\" style=\"background:#ef4444\"></span>Max: {entropyMax.ToString("F4", CultureInfo.InvariantCulture)}</span>" +
+              "</div>"
+            : string.Empty;
+
         sb.AppendLine($$"""
                 <section>
                   <div class="grid-3">
@@ -1017,18 +1332,27 @@ public class HtmlReporter
                       <div class="gauge-wrap"><canvas id="gaugeEntropy"></canvas></div>
                       <div class="gauge-value" style="color:{{entropyColor}}">{{entropy.ToString("F4", CultureInfo.InvariantCulture)}}</div>
                       <div class="gauge-label">EntropyX Score</div>
+                      {{entropyHistoryStats}}
                     </div>
                     <div class="chart-card">
                       <h2>Complexity Health</h2>
                       <div class="gauge-wrap"><canvas id="gaugeCc"></canvas></div>
                       <div class="gauge-value" style="color:{{ccColor}}">{{avgCc.ToString("F2", CultureInfo.InvariantCulture)}}</div>
                       <div class="gauge-label">Avg Cyclomatic Complexity</div>
+                      <div class="gauge-stats">
+                        <span class="gauge-stat"><span class="stat-dot" style="background:#22c55e"></span>Low: {{ccLow.ToString("F1", CultureInfo.InvariantCulture)}}</span>
+                        <span class="gauge-stat"><span class="stat-dot" style="background:#ef4444"></span>High: {{ccHigh.ToString("F1", CultureInfo.InvariantCulture)}}</span>
+                      </div>
                     </div>
                     <div class="chart-card">
                       <h2>Smell Health</h2>
                       <div class="gauge-wrap"><canvas id="gaugeSmells"></canvas></div>
                       <div class="gauge-value" style="color:{{smellsColor}}">{{avgSmells.ToString("F1", CultureInfo.InvariantCulture)}}</div>
                       <div class="gauge-label">Avg Weighted Smell Score</div>
+                      <div class="gauge-stats">
+                        <span class="gauge-stat"><span class="stat-dot" style="background:#22c55e"></span>Low: {{smellLow.ToString("F1", CultureInfo.InvariantCulture)}}</span>
+                        <span class="gauge-stat"><span class="stat-dot" style="background:#ef4444"></span>High: {{smellHigh.ToString("F1", CultureInfo.InvariantCulture)}}</span>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -1100,6 +1424,168 @@ public class HtmlReporter
         }
 
         sb.AppendLine("      </div></details></div></section>");
+    }
+
+    /// <summary>
+    /// Exports standalone SVG line-chart figures to <paramref name="outputDir"/>.
+    /// Generates: entropy-over-time.svg, sloc-over-time.svg, sloc-per-file-over-time.svg,
+    /// and (when <paramref name="commitStats"/> is supplied) cc-over-time.svg and smell-over-time.svg.
+    /// </summary>
+    public static void ExportSvgFigures(
+        string outputDir,
+        IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
+        IReadOnlyList<CommitFileStats>? commitStats = null)
+    {
+        Directory.CreateDirectory(outputDir);
+        var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
+        var sampled = Downsample(ordered, 200);
+
+        var entropyPts = sampled
+            .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                          h.Metrics.EntropyScore))
+            .ToList();
+        File.WriteAllText(Path.Combine(outputDir, "entropy-over-time.svg"),
+            BuildLineSvg("Entropy Over Time", "Date", "Entropy Score", entropyPts, "#7c6af7"));
+
+        var slocPts = sampled
+            .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                          (double)h.Metrics.TotalSloc))
+            .ToList();
+        File.WriteAllText(Path.Combine(outputDir, "sloc-over-time.svg"),
+            BuildLineSvg("SLOC Over Time", "Date", "SLOC", slocPts, "#22c55e"));
+
+        var slocPerFilePts = sampled
+            .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                          h.Metrics.TotalFiles > 0 ? (double)h.Metrics.TotalSloc / h.Metrics.TotalFiles : 0.0))
+            .ToList();
+        File.WriteAllText(Path.Combine(outputDir, "sloc-per-file-over-time.svg"),
+            BuildLineSvg("SLOC per File Over Time", "Date", "SLOC / File", slocPerFilePts, "#f59e0b"));
+
+        if (commitStats is { Count: > 0 })
+        {
+            var sampledStats = Downsample(commitStats, 200);
+
+            var ccPts = sampledStats
+                .Select(s => (s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                              s.AvgCc))
+                .ToList();
+            File.WriteAllText(Path.Combine(outputDir, "cc-over-time.svg"),
+                BuildLineSvg("Avg Cyclomatic Complexity Over Time", "Date", "Avg CC", ccPts, "#ef4444"));
+
+            var smellPts = sampledStats
+                .Select(s => (s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                              s.AvgSmell))
+                .ToList();
+            File.WriteAllText(Path.Combine(outputDir, "smell-over-time.svg"),
+                BuildLineSvg("Avg Smell Score Over Time", "Date", "Avg Smell", smellPts, "#a855f7"));
+        }
+    }
+
+    /// <summary>
+    /// Generates a standalone SVG line chart suitable for embedding in papers/whitepapers.
+    /// </summary>
+    private static string BuildLineSvg(
+        string title,
+        string xLabel,
+        string yLabel,
+        IReadOnlyList<(string Label, double Value)> points,
+        string lineColor)
+    {
+        const int W = 900, H = 420;
+        const int padL = 72, padR = 30, padT = 50, padB = 60;
+        int chartW = W - padL - padR;
+        int chartH = H - padT - padB;
+
+        if (points.Count == 0)
+        {
+            return $"""<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}"><rect width="{W}" height="{H}" fill="#0f1117"/><text x="{W / 2}" y="{H / 2}" text-anchor="middle" fill="#888" font-family="sans-serif" font-size="16">{EscapeHtml(title)} — no data</text></svg>""";
+        }
+
+        double minV = points.Min(p => p.Value);
+        double maxV = points.Max(p => p.Value);
+        if (Math.Abs(maxV - minV) < 1e-12) { minV -= 1; maxV += 1; }
+
+        // Nice round Y-axis ticks
+        int tickCount = 5;
+        double rawStep = (maxV - minV) / (tickCount - 1);
+        double mag = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
+        double niceStep = rawStep / mag switch { <= 1 => 1, <= 2 => 2, <= 5 => 5, _ => 10 } * mag;
+        double yAxisMin = Math.Floor(minV / niceStep) * niceStep;
+        double yAxisMax = Math.Ceiling(maxV / niceStep) * niceStep;
+        if (Math.Abs(yAxisMax - yAxisMin) < 1e-12) yAxisMax = yAxisMin + niceStep;
+
+        double xScale = (double)chartW / Math.Max(1, points.Count - 1);
+        double yScale = chartH / (yAxisMax - yAxisMin);
+
+        // Map a data point to SVG coordinates
+        double Px(int i) => padL + i * xScale;
+        double Py(double v) => padT + chartH - (v - yAxisMin) * yScale;
+
+        var sb = new StringBuilder();
+        sb.Append($"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">""");
+
+        // Background
+        sb.Append($"""<rect width="{W}" height="{H}" fill="#0f1117"/>""");
+
+        // Title
+        sb.Append($"""<text x="{W / 2}" y="28" text-anchor="middle" fill="#e0e0e0" font-family="Segoe UI,sans-serif" font-size="16" font-weight="bold">{EscapeHtml(title)}</text>""");
+
+        // Y label (rotated)
+        sb.Append($"""<text x="14" y="{padT + chartH / 2}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="12" transform="rotate(-90,14,{padT + chartH / 2})">{EscapeHtml(yLabel)}</text>""");
+
+        // X label
+        sb.Append($"""<text x="{padL + chartW / 2}" y="{H - 8}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="12">{EscapeHtml(xLabel)}</text>""");
+
+        // Grid lines + Y-axis ticks
+        // Format: values ≥ 1 000 are shown as "Xk", values ≥ 1 use one decimal, smaller values use four decimals (e.g. entropy scores like 0.0012)
+        const double ThousandsThreshold = 1_000;
+        const double DecimalThreshold   = 1;
+        int gridSteps = tickCount;
+        for (int t = 0; t <= gridSteps; t++)
+        {
+            double v = yAxisMin + t * (yAxisMax - yAxisMin) / gridSteps;
+            double sy = Py(v);
+            sb.Append($"""<line x1="{padL}" y1="{sy:F1}" x2="{padL + chartW}" y2="{sy:F1}" stroke="#2d3044" stroke-width="1"/>""");
+            string tickLbl = v >= ThousandsThreshold ? (v / ThousandsThreshold).ToString("F1", CultureInfo.InvariantCulture) + "k"
+                           : v >= DecimalThreshold   ? v.ToString("F1", CultureInfo.InvariantCulture)
+                           :                           v.ToString("F4", CultureInfo.InvariantCulture);
+            sb.Append($"""<text x="{padL - 6}" y="{sy + 4:F1}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
+        }
+
+        // X-axis tick labels (show at most 10 evenly spaced)
+        int xTickCount = Math.Min(10, points.Count);
+        double xTickStep = (double)(points.Count - 1) / Math.Max(1, xTickCount - 1);
+        for (int t = 0; t < xTickCount; t++)
+        {
+            int idx = (int)Math.Round(t * xTickStep);
+            if (idx >= points.Count) idx = points.Count - 1;
+            double sx = Px(idx);
+            sb.Append($"""<text x="{sx:F1}" y="{padT + chartH + 18}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(points[idx].Label)}</text>""");
+        }
+
+        // Axes
+        sb.Append($"""<line x1="{padL}" y1="{padT}" x2="{padL}" y2="{padT + chartH}" stroke="#888" stroke-width="1"/>""");
+        sb.Append($"""<line x1="{padL}" y1="{padT + chartH}" x2="{padL + chartW}" y2="{padT + chartH}" stroke="#888" stroke-width="1"/>""");
+
+        // Filled area under the line
+        var fillPts = new StringBuilder();
+        fillPts.Append($"{Px(0):F1},{padT + chartH} ");
+        foreach (var (i, (_, v)) in points.Select((p, i) => (i, p)))
+            fillPts.Append($"{Px(i):F1},{Py(v):F1} ");
+        fillPts.Append($"{Px(points.Count - 1):F1},{padT + chartH}");
+
+        // Parse lineColor to derive fill opacity variant (e.g. #7c6af7 → rgba)
+        string fillColor = lineColor.StartsWith('#')
+            ? $"rgba({Convert.ToInt32(lineColor[1..3], 16)},{Convert.ToInt32(lineColor[3..5], 16)},{Convert.ToInt32(lineColor[5..7], 16)},0.2)"
+            : lineColor;
+        sb.Append($"""<polygon points="{fillPts}" fill="{fillColor}"/>""");
+
+        // The line itself
+        var linePts = string.Join(" ", points.Select((p, i) => $"{Px(i):F1},{Py(p.Value):F1}"));
+        sb.Append($"""<polyline points="{linePts}" fill="none" stroke="{EscapeHtml(lineColor)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>""");
+
+        sb.Append("</svg>");
+        return sb.ToString();
     }
 
     /// <summary>

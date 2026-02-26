@@ -346,8 +346,9 @@ public class HtmlReporterTests
 
         int sectionIdx = html.IndexOf("Smelly Areas", StringComparison.Ordinal);
         Assert.True(sectionIdx >= 0, "Smelly Areas section not found");
-        int nextSectionIdx = html.IndexOf("Troubled Commits", StringComparison.Ordinal);
-        Assert.True(nextSectionIdx > sectionIdx, "Troubled Commits section not found after Smelly Areas");
+        // Scope to the next card heading inside the issues section, not all the way to Troubled Commits
+        int nextSectionIdx = html.IndexOf("High Coupling Areas", StringComparison.Ordinal);
+        Assert.True(nextSectionIdx > sectionIdx, "High Coupling Areas section not found after Smelly Areas");
         var section = html[sectionIdx..nextSectionIdx];
         Assert.Contains("smelly.cs", section);
         Assert.DoesNotContain("clean.cs", section);
