@@ -27,4 +27,24 @@ public class CommitRepository(DatabaseContext context)
         var result = cmd.ExecuteScalar();
         return Convert.ToInt64(result) > 0;
     }
+
+    public IReadOnlyList<CommitInfo> GetAll()
+    {
+        using var connection = context.OpenConnection();
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT Hash, Timestamp, Parents FROM Commits ORDER BY Timestamp";
+        var results = new List<CommitInfo>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var hash = reader.GetString(0);
+            var ts = DateTimeOffset.Parse(reader.GetString(1));
+            var parents = reader.GetString(2)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+            results.Add(new CommitInfo(hash, ts, parents));
+        }
+        return results;
+    }
 }

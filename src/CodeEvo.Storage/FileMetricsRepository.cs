@@ -42,4 +42,26 @@ public class FileMetricsRepository(DatabaseContext context)
         var result = cmd.ExecuteScalar();
         return Convert.ToInt64(result) > 0;
     }
+
+    public IReadOnlyList<FileMetrics> GetByCommit(string commitHash)
+    {
+        using var connection = context.OpenConnection();
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT CommitHash, Path, Language, Sloc, CyclomaticComplexity, MaintainabilityIndex,
+                   SmellsHigh, SmellsMedium, SmellsLow, CouplingProxy, MaintainabilityProxy
+            FROM FileMetrics WHERE CommitHash = @commitHash
+            """;
+        cmd.Parameters.AddWithValue("@commitHash", commitHash);
+        var results = new List<FileMetrics>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            results.Add(new FileMetrics(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.GetInt32(3), reader.GetDouble(4), reader.GetDouble(5),
+                reader.GetInt32(6), reader.GetInt32(7), reader.GetInt32(8),
+                reader.GetDouble(9), reader.GetDouble(10)));
+        return results;
+    }
 }
