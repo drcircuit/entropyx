@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EntropyX Evolutionary Comparison</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --border: #2d3044;
+      --text: #e0e0e0; --muted: #888; --accent: #7c6af7;
+      --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
+      --font: 'Segoe UI', system-ui, sans-serif;
+      --baseline: #60a5fa; --current: #f97316;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+    h1 { font-size: 2rem; font-weight: 700; }
+    h2 { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; }
+    h3 { font-size: 1rem; font-weight: 600; color: var(--muted); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: .05em; }
+    header { padding: 2rem 2.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    header .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 2rem 2.5rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .stat { text-align: center; }
+    .stat .value { font-size: 2.2rem; font-weight: 700; }
+    .stat .label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; }
+    .stat .sub { font-size: 0.8rem; margin-top: 0.25rem; }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .chart-wrap { position: relative; height: 280px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 0.5rem 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); word-break: break-all; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge-red    { background: rgba(239,68,68,.15);   color: var(--red); }
+    .badge-green  { background: rgba(34,197,94,.15);   color: var(--green); }
+    .badge-yellow { background: rgba(245,158,11,.15);  color: var(--yellow); }
+    .badge-gray   { background: rgba(136,136,136,.15); color: var(--muted); }
+    .badge-blue   { background: rgba(96,165,250,.15);  color: var(--baseline); }
+    .badge-orange { background: rgba(249,115,22,.15);  color: var(--current); }
+    .delta-pos  { color: var(--red); }
+    .delta-neg  { color: var(--green); }
+    .delta-zero { color: var(--muted); }
+    section { margin-bottom: 2.5rem; }
+    .section-title { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .verdict-box { border-radius: 12px; padding: 1.5rem 2rem; border: 2px solid; margin-bottom: 1.5rem; }
+    .verdict-improving  { border-color: var(--green);  background: rgba(34,197,94,.08); }
+    .verdict-stable     { border-color: var(--yellow); background: rgba(245,158,11,.08); }
+    .verdict-regressing { border-color: var(--red);    background: rgba(239,68,68,.08); }
+    .verdict-critical   { border-color: #ff0033;       background: rgba(255,0,51,.12); }
+    .verdict-label { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .verdict-summary { color: var(--text); font-size: 0.95rem; }
+    .obs-list { list-style: none; padding: 0; margin-top: 1rem; }
+    .obs-list li { padding: 0.3rem 0; color: var(--text); font-size: 0.9rem; }
+    .obs-list li::before { content: '→ '; color: var(--muted); }
+    .entropy-hero { display: flex; align-items: center; justify-content: center; gap: 3rem; padding: 2rem; flex-wrap: wrap; }
+    .entropy-hero .side { text-align: center; }
+    .entropy-hero .side .tag { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 0.25rem; }
+    .entropy-hero .side .score { font-size: 3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .entropy-hero .side .score.baseline-color { color: var(--baseline); }
+    .entropy-hero .side .score.current-color  { color: var(--current); }
+    .entropy-hero .arrow { font-size: 2rem; color: var(--muted); }
+    .entropy-hero .delta-panel { text-align: center; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.5rem; }
+    .entropy-hero .delta-panel .delta-value { font-size: 1.8rem; font-weight: 700; }
+    .entropy-hero .delta-panel .delta-tag { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .dot-baseline { background: var(--baseline); }
+    .dot-current  { background: var(--current); }
+    details { margin-bottom: 1rem; }
+    details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: rgba(124,106,247,.08); border: 1px solid var(--border); border-radius: 8px; color: var(--accent); font-weight: 600; font-size: 0.9rem; user-select: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.7rem; transition: transform .2s; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details .details-body { padding: 1rem 0; }
+    footer { padding: 1.5rem 2.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>⚡ EntropyX Evolutionary Comparison</h1>
+    <div class="subtitle">Generated 2026-02-26 13:43 UTC&nbsp;&nbsp;·&nbsp;&nbsp;Baseline: 2024-01-15 (50 commits)&nbsp;&nbsp;→&nbsp;&nbsp;Current: 2024-03-01 (120 commits)</div>
+  </div>
+</header>
+<div class="container"><section>
+  <div class="section-title">EntropyX Score — Prime Indicator</div>
+  <div class="card">
+    <div class="entropy-hero">
+      <div class="side">
+        <div class="tag"><span class="legend-dot dot-baseline"></span>Baseline</div>
+        <div class="score baseline-color">1.2345</div>
+        <div style="margin-top:.5rem"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="20"><rect width="68" height="20" rx="3" fill="#555"/><rect x="68" width="52" height="20" rx="3" fill="#f59e0b"/><text x="34" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11">EntropyX</text><text x="94" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11" font-weight="bold">1.2345</text></svg></div>
+        <div style="color:var(--muted);font-size:.8rem;margin-top:.5rem">2024-01-15 · 50 commits</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="side">
+        <div class="tag"><span class="legend-dot dot-current"></span>Current</div>
+        <div class="score current-color">0.9876</div>
+        <div style="margin-top:.5rem"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="20"><rect width="68" height="20" rx="3" fill="#555"/><rect x="68" width="52" height="20" rx="3" fill="#f59e0b"/><text x="34" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11">EntropyX</text><text x="94" y="14" text-anchor="middle" fill="#fff" font-family="DejaVu Sans,Verdana,sans-serif" font-size="11" font-weight="bold">0.9876</text></svg></div>
+        <div style="color:var(--muted);font-size:.8rem;margin-top:.5rem">2024-03-01 · 120 commits</div>
+      </div>
+      <div class="delta-panel">
+        <div class="delta-tag">Δ EntropyX</div>
+        <div class="delta-value delta-neg">-0.2469</div>
+        <div style="color:var(--muted);font-size:.8rem;margin-top:.25rem">-20.0%</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="section-title">Evolutionary Assessment</div>
+  <div class="verdict-box verdict-improving">
+    <div class="verdict-label">🟢 Improving</div>
+    <div class="verdict-summary">EntropyX score has decreased, indicating that code quality distribution is improving. Keep up the good work.</div>
+    <ul class="obs-list">
+      <li>EntropyX score decreased by 0.2469 (20.0 %), indicating improved code quality distribution.</li>
+      <li>Current snapshot shows a downward entropy trend (slope ≈ -0.0617/commit), suggesting active refactoring.</li>
+      <li>Codebase grew by 1,600 SLOC while entropy improved — a positive signal of controlled growth.</li>
+      <li>6 new file(s) added since baseline.</li>
+      <li>1 file(s) show higher badness in the current snapshot (e.g. src/Utils/Helper.cs).</li>
+      <li>1 file(s) show lower badness in the current snapshot (e.g. src/Core/Engine.cs).</li>
+    </ul>
+  </div>
+</section>
+<section>
+  <div class="section-title">Metrics Overview</div>
+  <div class="grid-4">
+    <div class="card stat">
+      <div class="label">EntropyX Score ★</div>
+      <div class="value" style="font-size:1.4rem;color:var(--accent);">
+        <span style="color:var(--baseline)">1.2345</span>
+        <span style="color:var(--muted);font-size:1rem"> → </span>
+        <span style="color:var(--current)">0.9876</span>
+      </div>
+      <div class="sub delta-neg">-0.2469</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Total Files</div>
+      <div class="value" style="font-size:1.4rem;">
+        <span style="color:var(--baseline)">25</span>
+        <span style="color:var(--muted);font-size:1rem"> → </span>
+        <span style="color:var(--current)">31</span>
+      </div>
+      <div class="sub delta-neg">+6</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Total SLOC</div>
+      <div class="value" style="font-size:1.4rem;">
+        <span style="color:var(--baseline)">4,200</span>
+        <span style="color:var(--muted);font-size:1rem"> → </span>
+        <span style="color:var(--current)">5,800</span>
+      </div>
+      <div class="sub delta-neg">+1,600</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Commits Analysed</div>
+      <div class="value" style="font-size:1.4rem;">
+        <span style="color:var(--baseline)">50</span>
+        <span style="color:var(--muted);font-size:1rem"> → </span>
+        <span style="color:var(--current)">120</span>
+      </div>
+      <div class="sub delta-neg">+70</div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="section-title">Entropy Trend Comparison</div>
+  <div class="chart-card">
+    <div style="display:flex;gap:1.5rem;margin-bottom:.75rem;font-size:.85rem;">
+      <span><span class="legend-dot dot-baseline" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--baseline);margin-right:4px;vertical-align:middle"></span>Baseline (50 commits)</span>
+      <span><span class="legend-dot dot-current" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--current);margin-right:4px;vertical-align:middle"></span>Current (120 commits)</span>
+    </div>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+</section>
+<script>
+(function() {
+  var bLabels = ["2024-01-01","2024-01-05","2024-01-08","2024-01-12","2024-01-15"];
+  var bData   = [0.800000,0.950000,1.100000,1.150000,1.234500];
+  var cLabels = ["2024-01-15","2024-02-01","2024-02-10","2024-02-20","2024-03-01"];
+  var cData   = [1.234500,1.150000,1.050000,0.980000,0.987600];
+  // Merge all labels by normalizing both series to index-based x
+  var ctx = document.getElementById('trendChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: bLabels.length >= cLabels.length ? bLabels : cLabels,
+      datasets: [
+        {
+          label: 'Baseline',
+          data: bData.map((v,i) => ({x: i, y: parseFloat(v)})),
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96,165,250,.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          parsing: false
+        },
+        {
+          label: 'Current',
+          data: cData.map((v,i) => ({x: i, y: parseFloat(v)})),
+          borderColor: '#f97316',
+          backgroundColor: 'rgba(249,115,22,.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          parsing: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#888' } } },
+      scales: {
+        x: { type: 'linear', ticks: { color: '#888' }, grid: { color: '#2d3044' } },
+        y: { ticks: { color: '#888' }, grid: { color: '#2d3044' } }
+      }
+    }
+  });
+})();
+</script>
+<section>
+  <div class="section-title">File-Level Changes</div>
+    <details open><summary>Files with Higher Badness (Worsened) <span class="summary-meta">1 file(s)</span></summary>
+      <div class="details-body">
+  <table>
+    <thead><tr>
+      <th>Path</th><th>Language</th>
+      <th style="text-align:right">Badness (Base)</th>
+      <th style="text-align:right">Badness (Now)</th>
+      <th style="text-align:right">Δ Badness</th>
+      <th style="text-align:right">SLOC</th>
+      <th style="text-align:right">CC</th>
+    </tr></thead><tbody>
+  <tr>
+    <td style="font-family:monospace;font-size:12px">src/Utils/Helper.cs</td>
+    <td>CSharp</td>
+    <td style="text-align:right">0.1200</td>
+    <td style="text-align:right">0.1800</td>
+    <td style="text-align:right" class="delta-pos">+0.0600</td>
+    <td style="text-align:right">90</td>
+    <td style="text-align:right">5.0</td>
+  </tr>
+    </tbody></table>
+      </div></details>
+    <details><summary>Files with Lower Badness (Improved) <span class="summary-meta">1 file(s)</span></summary>
+      <div class="details-body">
+  <table>
+    <thead><tr>
+      <th>Path</th><th>Language</th>
+      <th style="text-align:right">Badness (Base)</th>
+      <th style="text-align:right">Badness (Now)</th>
+      <th style="text-align:right">Δ Badness</th>
+      <th style="text-align:right">SLOC</th>
+      <th style="text-align:right">CC</th>
+    </tr></thead><tbody>
+  <tr>
+    <td style="font-family:monospace;font-size:12px">src/Core/Engine.cs</td>
+    <td>CSharp</td>
+    <td style="text-align:right">0.7200</td>
+    <td style="text-align:right">0.5200</td>
+    <td style="text-align:right" class="delta-neg">-0.2000</td>
+    <td style="text-align:right">295</td>
+    <td style="text-align:right">14.0</td>
+  </tr>
+    </tbody></table>
+      </div></details>
+    <details><summary>New Files <span class="summary-meta">2 file(s)</span></summary>
+      <div class="details-body">
+  <table>
+    <thead><tr>
+      <th>Path</th><th>Language</th>
+      <th style="text-align:right">SLOC</th>
+      <th style="text-align:right">CC</th>
+      <th style="text-align:right">MI</th>
+      <th style="text-align:right">Badness</th>
+    </tr></thead><tbody>
+  <tr>
+    <td style="font-family:monospace;font-size:12px">src/Api/Controller.cs</td>
+    <td>CSharp</td>
+    <td style="text-align:right">180</td>
+    <td style="text-align:right">9.0</td>
+    <td style="text-align:right">74.0</td>
+    <td style="text-align:right">0.3500</td>
+  </tr>
+  <tr>
+    <td style="font-family:monospace;font-size:12px">src/Api/Auth.cs</td>
+    <td>CSharp</td>
+    <td style="text-align:right">140</td>
+    <td style="text-align:right">7.5</td>
+    <td style="text-align:right">76.0</td>
+    <td style="text-align:right">0.2200</td>
+  </tr>
+    </tbody></table>
+      </div></details>
+    <details><summary>Removed Files <span class="summary-meta">none</span></summary>
+      <div class="details-body">
+        <div style="color:var(--muted);font-style:italic">No removed files.</div>
+      </div></details>
+</section>
+</div>
+<footer>Generated by EntropyX &copy; 2026 &nbsp;·&nbsp; Evolutionary comparison report</footer>
+</body>
+</html>
