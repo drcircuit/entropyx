@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the following whitepaper."
+preferred-citation:
+  type: generic
+  title: "EntropyX: A Longitudinal Entropy-Based Framework for Measuring Code Drift and Technical Debt in Modern Software Systems"
+  authors:
+    - family-names: Sande-Larsen
+      given-names: Espen
+  doi: 10.5281/zenodo.18786769
+  url: https://zenodo.org/records/18786770
+  date-released: 2026-02-26

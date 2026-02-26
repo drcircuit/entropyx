@@ -23,6 +23,7 @@ It walks your git history, collects per-file quality signals (SLOC, cyclomatic c
   - [heatmap](#heatmap)
 - [Metrics Reference](#metrics-reference)
 - [Entropy Formula](#entropy-formula)
+- [Citation](#citation)
 - [Supported Languages](#supported-languages)
 
 ---
@@ -307,6 +308,25 @@ The entropy score for a commit is computed as follows:
 8. **Clamp** at 0.
 
 A **high score** means complexity and problems are both large in magnitude *and* spread evenly across many files — the worst possible state for maintainability.
+
+---
+
+## Citation
+
+If you use EntropyX in academic work or want to reference its design, please cite the foundational whitepaper:
+
+> Sande-Larsen, E. (2026). *EntropyX: A Longitudinal Entropy-Based Framework for Measuring Code Drift and Technical Debt in Modern Software Systems*. Zenodo. https://doi.org/10.5281/zenodo.18786769
+
+```bibtex
+@misc{sandelarsen2026entropyx,
+  author    = {Sande-Larsen, Espen},
+  title     = {{EntropyX}: A Longitudinal Entropy-Based Framework for Measuring Code Drift and Technical Debt in Modern Software Systems},
+  year      = {2026},
+  doi       = {10.5281/zenodo.18786769},
+  url       = {https://zenodo.org/records/18786770},
+  publisher = {Zenodo}
+}
+```
 
 ---
 
