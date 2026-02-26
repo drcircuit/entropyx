@@ -280,6 +280,10 @@ The HTML report includes:
 - **CC and Smell timeseries** – avg cyclomatic complexity and avg smell score over time
 - **Complexity heatmap** – per-file badness scores for the latest commit, sorted hottest-first
 - **Issues section** – top 10 files by size, cyclomatic complexity, smell score, and coupling, each with a colored severity badge
+- **Entropy Contribution Analysis** – three ranked lists that decompose where entropy is coming from:
+  - *Top diffusion contributors* — files with the highest `−p_i·log₂(p_i)` term; the entropy *spreaders* pulling complexity toward a uniform distribution
+  - *Top badness contributors* — files with the highest raw combined badness `b_i`
+  - *Top delta contributors* — files with the largest increase in badness since the previous commit (requires ≥ 2 scanned commits)
 - **Troubled commits** – commits that caused a statistically significant entropy _increase_
 - **Heroic commits** – commits that caused a statistically significant entropy _decrease_
 - **Full commit table** – all commits with entropy score and delta, color-coded green/red

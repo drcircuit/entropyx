@@ -17,7 +17,8 @@ public class HtmlReporter
     public string Generate(
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
         IReadOnlyList<FileMetrics> latestFiles,
-        IReadOnlyList<CommitFileStats>? commitStats = null)
+        IReadOnlyList<CommitFileStats>? commitStats = null,
+        IReadOnlyList<FileMetrics>? prevFiles = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -39,7 +40,7 @@ public class HtmlReporter
 
         double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats);
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles);
     }
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
@@ -530,7 +531,8 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> coupledFiles,
         IReadOnlyList<FileMetrics> latestFiles,
         double[] badness,
-        IReadOnlyList<CommitFileStats>? commitStats = null)
+        IReadOnlyList<CommitFileStats>? commitStats = null,
+        IReadOnlyList<FileMetrics>? prevFiles = null)
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
@@ -545,6 +547,8 @@ public class HtmlReporter
             AppendCcSmellCharts(sb, commitStats);
         AppendHeatmapSection(sb, latestFiles, badness);
         AppendIssuesSection(sb, largeFiles, complexFiles, smellyFiles, coupledFiles);
+        if (latestFiles.Count > 0)
+            AppendDiffusionSection(sb, latestFiles, badness, prevFiles);
         AppendTroubledSection(sb, troubled);
         AppendHeroicSection(sb, heroic);
         AppendCommitTableSection(sb, deltas);
@@ -932,6 +936,214 @@ public class HtmlReporter
         }
         sb.AppendLine("      </tbody></table>");
     }
+
+    private static void AppendDiffusionSection(
+        StringBuilder sb,
+        IReadOnlyList<FileMetrics> files,
+        double[] badness,
+        IReadOnlyList<FileMetrics>? prevFiles)
+    {
+        double[] diffusion = EntropyCalculator.ComputeDiffusionContributions(badness);
+
+        // Top diffusion contributors: highest -p_i·log₂(p_i)
+        // Zip all three parallel arrays together once to avoid repeated index lookups
+        var fileStats = files
+            .Zip(badness, (f, b) => (File: f, Badness: b))
+            .Zip(diffusion, (fb, d) => (fb.File, fb.Badness, Diffusion: d))
+            .ToList();
+
+        var topDiffusion = fileStats
+            .Where(x => x.Diffusion > 0)
+            .OrderByDescending(x => x.Diffusion)
+            .Take(TopFilesCount)
+            .ToList();
+
+        // Top badness contributors: highest raw b_i
+        var topBadness = fileStats
+            .Where(x => x.Badness > 0)
+            .OrderByDescending(x => x.Badness)
+            .Take(TopFilesCount)
+            .ToList();
+
+        // Top delta contributors: largest increase in badness vs previous commit
+        // Match files by path; new files (no prev) get Δb = b_i(new)
+        List<(FileMetrics File, double Delta, double OldBadness, double NewBadness)> topDelta = [];
+        if (prevFiles is { Count: > 0 })
+        {
+            double[] prevBadness = EntropyCalculator.ComputeBadness(prevFiles);
+            var prevBadnessByPath = prevFiles.Zip(prevBadness)
+                .ToDictionary(x => x.First.Path, x => x.Second);
+
+            topDelta = files.Zip(badness)
+                .Select(x =>
+                {
+                    double oldB = prevBadnessByPath.TryGetValue(x.First.Path, out var pb) ? pb : 0.0;
+                    return (x.First, x.Second - oldB, oldB, x.Second);
+                })
+                .Where(x => x.Item2 > 1e-9)
+                .OrderByDescending(x => x.Item2)
+                .Take(TopFilesCount)
+                .ToList();
+        }
+
+        sb.AppendLine("""
+                <section>
+                  <div class="section-title">📊 Entropy Contribution Analysis</div>
+                  <p style="color:var(--muted);font-size:13px;margin-bottom:1.5rem">
+                    These three lists decompose the entropy score into per-file signals.
+                    A file can be a top diffusion spreader without being the worst in raw badness — and vice versa.
+                  </p>
+            """);
+
+        // ── Diffusion contributors ─────────────────────────────────────────────
+        sb.AppendLine("""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>🌊 Top Diffusion Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the highest <code style="color:var(--accent)">−p<sub>i</sub>·log₂(p<sub>i</sub>)</code> term.
+                      These are the <strong>entropy spreaders</strong> — files pulling complexity
+                      toward a uniform distribution and away from a single obvious hotspot.
+                    </p>
+                    <details open>
+                      <summary>Top files by diffusion contribution <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+        if (topDiffusion.Count == 0)
+        {
+            sb.AppendLine("""    <p class="empty-msg">No diffusion data available.</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Diffusion</th><th>Badness</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, b, contrib) in topDiffusion)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--accent)">{{contrib.ToString("F4", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{b.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{DiffusionBadge(contrib)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table>");
+        }
+        sb.AppendLine("      </div></details></div>");
+
+        // ── Badness contributors ───────────────────────────────────────────────
+        sb.AppendLine("""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>☠ Top Badness Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the highest raw <strong>badness score</strong> <code style="color:var(--accent)">b<sub>i</sub></code>.
+                      These are the <strong>most problematic files</strong> by combined SLOC, complexity, smells, coupling, and maintainability.
+                    </p>
+                    <details open>
+                      <summary>Top files by badness score <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+        if (topBadness.Count == 0)
+        {
+            sb.AppendLine("""    <p class="empty-msg">No badness data available.</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Badness</th><th>CC</th><th>MI</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, b, _) in topBadness)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--red)">{{b.ToString("F3", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{f.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{f.MaintainabilityIndex.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{BadnessBadge(b)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table>");
+        }
+        sb.AppendLine("      </div></details></div>");
+
+        // ── Delta contributors ─────────────────────────────────────────────────
+        sb.AppendLine($$"""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>📈 Top Delta Contributors</h2>
+                    <p style="color:var(--muted);font-size:13px;margin-bottom:1rem">
+                      Files with the largest <strong>increase in badness</strong> since the previous commit (Δ<code style="color:var(--accent)">b<sub>i</sub></code>).
+                      {{(prevFiles is null ? "Not available — only one commit has been scanned." : "These files are driving the entropy upward.")}}
+                    </p>
+            """);
+        if (topDelta.Count == 0)
+        {
+            string msg = prevFiles is null
+                ? "Requires at least two scanned commits."
+                : "No files increased in badness since the previous commit. 🎉";
+            sb.AppendLine($"""    <p class="empty-msg">{msg}</p>""");
+        }
+        else
+        {
+            sb.AppendLine("""
+                    <details open>
+                      <summary>Top files by badness increase <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+                        <table>
+                          <thead><tr><th>File</th><th>Language</th><th>Δ Badness</th><th>Prev</th><th>Now</th><th>Status</th></tr></thead>
+                          <tbody>
+                """);
+            foreach (var (f, delta, oldB, newB) in topDelta)
+            {
+                sb.AppendLine($$"""
+                            <tr>
+                              <td>{{EscapeHtml(f.Path)}}</td>
+                              <td>{{EscapeHtml(f.Language)}}</td>
+                              <td><strong style="color:var(--red)">+{{delta.ToString("F3", CultureInfo.InvariantCulture)}}</strong></td>
+                              <td>{{oldB.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{newB.ToString("F3", CultureInfo.InvariantCulture)}}</td>
+                              <td>{{DeltaBadge(delta)}}</td>
+                            </tr>
+                    """);
+            }
+            sb.AppendLine("      </tbody></table></div></details>");
+        }
+        sb.AppendLine("      </div>");
+
+        sb.AppendLine("</section>");
+    }
+
+    private static string DiffusionBadge(double contrib) => contrib switch
+    {
+        > 0.3 => """<span class="badge badge-red">Dominant spreader</span>""",
+        > 0.15 => """<span class="badge badge-yellow">High spread</span>""",
+        > 0.05 => """<span class="badge badge-gray">Moderate</span>""",
+        _ => """<span class="badge badge-green">Low</span>"""
+    };
+
+    private static string BadnessBadge(double b) => b switch
+    {
+        > 3.0 => """<span class="badge badge-red">Critical</span>""",
+        > 2.0 => """<span class="badge badge-yellow">High</span>""",
+        > 1.0 => """<span class="badge badge-gray">Moderate</span>""",
+        _ => """<span class="badge badge-green">Low</span>"""
+    };
+
+    private static string DeltaBadge(double delta) => delta switch
+    {
+        > 1.0 => """<span class="badge badge-red">Large regression</span>""",
+        > 0.5 => """<span class="badge badge-yellow">Regression</span>""",
+        > 0.1 => """<span class="badge badge-gray">Minor regression</span>""",
+        _ => """<span class="badge badge-green">Minimal</span>"""
+    };
 
     private static void AppendTroubledSection(StringBuilder sb, IReadOnlyList<CommitDelta> troubled)
     {

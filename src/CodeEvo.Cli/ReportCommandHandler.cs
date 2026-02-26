@@ -84,8 +84,13 @@ internal static class ReportCommandHandler
         if (history.Count > 0)
             latestFiles = CliHelpers.FilterByKind(fileMetricsRepo.GetByCommit(history[^1].Item1.Hash), kind);
 
+        // Get file metrics for the previous commit (for delta contributor analysis)
+        IReadOnlyList<FileMetrics>? prevFiles = null;
+        if (history.Count >= 2)
+            prevFiles = CliHelpers.FilterByKind(fileMetricsRepo.GetByCommit(history[^2].Item1.Hash), kind);
+
         var htmlReporter = new HtmlReporter();
-        var html = htmlReporter.Generate(history, latestFiles, commitStats);
+        var html = htmlReporter.Generate(history, latestFiles, commitStats, prevFiles);
         File.WriteAllText(htmlPath, html);
 
         // Write data.json alongside the HTML for later comparison

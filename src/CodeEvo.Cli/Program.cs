@@ -178,7 +178,7 @@ toolsCommand.SetHandler((string path) => CheckTools(path), toolsPathArg);
 
 // ── heatmap command ───────────────────────────────────────────────────────────
 var heatmapPathArg     = new Argument<string>("path", () => ".", "Directory to scan");
-var heatmapOutputOpt   = new Option<string?>("--html", () => null, "Save heatmap PNG to this file path");
+var heatmapOutputOpt   = new Option<string?>("--html", () => null, "Save heatmap as a PNG image to this file path");
 var heatmapIncludeOpt  = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
 var heatmapCommand     = new Command("heatmap", "Show a complexity heatmap for source files in a directory");
 heatmapCommand.AddArgument(heatmapPathArg);

@@ -143,6 +143,29 @@ public static class EntropyCalculator
         return result;
     }
 
+    /// <summary>
+    /// Computes the per-file diffusion (Shannon entropy) contribution:
+    ///   contrib_i = −p_i · log₂(p_i)
+    /// where p_i = b_i / Σb over the active files (b_i > ε).
+    /// Files with b_i ≤ ε are assigned contrib = 0.
+    /// The sum of all contributions equals the raw (unnormalized) Shannon entropy H.
+    /// A file with a high contribution is an "entropy spreader" — it pulls the
+    /// distribution away from a single dominant outlier and toward uniform diffusion.
+    /// </summary>
+    public static double[] ComputeDiffusionContributions(double[] badness)
+    {
+        double total = badness.Where(b => b > Epsilon).Sum();
+        if (total <= Epsilon)
+            return new double[badness.Length];
+
+        return badness.Select(b =>
+        {
+            if (b <= Epsilon) return 0.0;
+            double p = b / total;
+            return -p * Math.Log2(p);
+        }).ToArray();
+    }
+
     // Weighted smells score used as raw input before normalization
     private static double RawSmells(FileMetrics f) =>
         f.SmellsHigh * SmellHighWeight + f.SmellsMedium * SmellMediumWeight + f.SmellsLow * SmellLowWeight;
