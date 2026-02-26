@@ -127,18 +127,22 @@ checkCommand.AddCommand(checkToolsCommand);
 var reportRepoArg = new Argument<string>("repoPath", "Path to the git repository");
 var reportDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
 var reportCommitOption = new Option<string?>("--commit", () => null, "Show metrics for a specific commit hash");
+var reportHtmlOption = new Option<string?>("--html", () => null, "Write a rich HTML report to this file");
 
 var reportCommand = new Command("report", "Show metrics report");
 reportCommand.AddArgument(reportRepoArg);
 reportCommand.AddOption(reportDbOption);
 reportCommand.AddOption(reportCommitOption);
+reportCommand.AddOption(reportHtmlOption);
 
-reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHash) =>
+reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHash, string? htmlPath) =>
 {
     var reporter = new ConsoleReporter();
     var db = new DatabaseContext();
     db.Initialize(dbPath);
     var repoMetricsRepo = new RepoMetricsRepository(db);
+    var commitRepo = new CommitRepository(db);
+    var fileMetricsRepo = new FileMetricsRepository(db);
 
     var allMetrics = repoMetricsRepo.GetAll();
     if (allMetrics.Count == 0)
@@ -154,8 +158,51 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
         Console.WriteLine($"Commit: {rm.CommitHash[..Math.Min(8, rm.CommitHash.Length)]}  Files: {rm.TotalFiles}  SLOC: {rm.TotalSloc}  Entropy: {rm.EntropyScore:F4}");
     }
 
+    if (htmlPath is not null)
+    {
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start("Generating HTML report...", _ =>
+            {
+                // Build ordered commit history
+                var allCommits = commitRepo.GetAll();
+                var commitByHash = allCommits.ToDictionary(c => c.Hash);
+                var metricsByHash = allMetrics.ToDictionary(m => m.CommitHash);
+
+                var history = allCommits
+                    .Where(c => metricsByHash.ContainsKey(c.Hash))
+                    .OrderBy(c => c.Timestamp)
+                    .Select(c => (c, metricsByHash[c.Hash]))
+                    .ToList();
+
+                // Fall back: use metrics in stored order when commit info is unavailable
+                if (history.Count == 0)
+                {
+                    history = allMetrics
+                        .Select(m =>
+                        {
+                            commitByHash.TryGetValue(m.CommitHash, out var ci);
+                            ci ??= new CommitInfo(m.CommitHash, DateTimeOffset.MinValue, []);
+                            return (ci, m);
+                        })
+                        .ToList();
+                }
+
+                // Get file metrics for the latest (most recent) commit
+                IReadOnlyList<FileMetrics> latestFiles = [];
+                if (history.Count > 0)
+                    latestFiles = fileMetricsRepo.GetByCommit(history[^1].Item1.Hash);
+
+                var htmlReporter = new HtmlReporter();
+                var html = htmlReporter.Generate(history, latestFiles);
+                File.WriteAllText(htmlPath, html);
+            });
+
+        AnsiConsole.MarkupLine($"[green]✓[/] HTML report written to [cyan]{Markup.Escape(htmlPath)}[/]");
+    }
+
     await Task.CompletedTask;
-}, reportRepoArg, reportDbOption, reportCommitOption);
+}, reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
 var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");

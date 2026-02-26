@@ -200,10 +200,10 @@ entropyx scan chk . --db metrics.db
 
 ### report
 
-Print a summary of all stored commit metrics. Optionally filter by a commit hash prefix.
+Print a summary of all stored commit metrics. Optionally filter by a commit hash prefix or generate a rich HTML report with graphs, timeseries, and issue highlights.
 
 ```sh
-entropyx report <repoPath> [--db <file>] [--commit <hash>]
+entropyx report <repoPath> [--db <file>] [--commit <hash>] [--html <outputFile>]
 ```
 
 | Argument / Option | Default | Description |
@@ -211,6 +211,7 @@ entropyx report <repoPath> [--db <file>] [--commit <hash>]
 | `repoPath` | _(required)_ | Path to the git repository |
 | `--db` | `entropyx.db` | SQLite database file |
 | `--commit` | _(all)_ | Show only the commit matching this hash prefix |
+| `--html` | _(none)_ | Write a rich HTML report to this file |
 
 ```sh
 # Show all commits
@@ -218,7 +219,18 @@ entropyx report . --db metrics.db
 
 # Show a specific commit
 entropyx report . --db metrics.db --commit abc1234
+
+# Generate a rich HTML report
+entropyx report . --db metrics.db --html report.html
 ```
+
+The HTML report includes:
+- **Entropy timeseries** – entropy score plotted over every scanned commit
+- **Codebase growth charts** – SLOC and file count over time
+- **Issues section** – top 10 files by size, cyclomatic complexity, and smell score, each with a colored severity badge
+- **Troubled commits** – commits that caused a statistically significant entropy _increase_
+- **Heroic commits** – commits that caused a statistically significant entropy _decrease_
+- **Full commit table** – all commits with their entropy score and delta, color-coded green/red
 
 ---
 

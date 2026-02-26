@@ -15,5 +15,6 @@
     <PackageReference Include="Moq" Version="4.20.72" />
     <ProjectReference Include="..\..\src\CodeEvo.Core\CodeEvo.Core.csproj" />
     <ProjectReference Include="..\..\src\CodeEvo.Adapters\CodeEvo.Adapters.csproj" />
+    <ProjectReference Include="..\..\src\CodeEvo.Reporting\CodeEvo.Reporting.csproj" />
   </ItemGroup>
 </Project>
