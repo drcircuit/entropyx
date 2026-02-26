@@ -13,8 +13,8 @@ public class HtmlReporterTests
         new(hash, files, sloc, entropy);
 
     private static FileMetrics MakeFileMetrics(string path, int sloc = 50, double cc = 3.0, double mi = 80.0,
-        int smellsHigh = 0, int smellsMed = 0, int smellsLow = 0) =>
-        new("hash", path, "CSharp", sloc, cc, mi, smellsHigh, smellsMed, smellsLow, 0, 0);
+        int smellsHigh = 0, int smellsMed = 0, int smellsLow = 0, double coupling = 0) =>
+        new("hash", path, "CSharp", sloc, cc, mi, smellsHigh, smellsMed, smellsLow, coupling, 0);
 
     // ── Generate ──────────────────────────────────────────────────────────────
 
@@ -673,5 +673,62 @@ public class HtmlReporterTests
         // The unescaped element name must not appear as an HTML tag anywhere in the document
         Assert.DoesNotContain("<xss>", html);
         Assert.Contains("&lt;xss&gt;", html);
+    }
+
+    // ── Coupling in reports ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Generate_ContainsHighCouplingSection()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/A.cs", coupling: 15),
+            MakeFileMetrics("src/B.cs", coupling: 3),
+        };
+
+        var html = reporter.Generate(history, files);
+
+        Assert.Contains("High Coupling", html);
+        Assert.Contains("src/A.cs", html);
+    }
+
+    [Fact]
+    public void GenerateDataJson_WithFiles_ContainsCouplingProxy()
+    {
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/Foo.cs", sloc: 150, cc: 8.0, coupling: 12),
+        };
+
+        var json = HtmlReporter.GenerateDataJson(history, files);
+
+        Assert.Contains("\"couplingProxy\"", json);
+        Assert.Contains("12", json);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_FileTable_ContainsCouplingColumn()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("abc");
+        var metrics = MakeRepoMetrics("abc", 0.5);
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/Heavy.cs", sloc: 200, cc: 10.0, coupling: 18),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, files, [], null);
+
+        Assert.Contains("Coupling", html);
+        Assert.Contains("18", html);
     }
 }

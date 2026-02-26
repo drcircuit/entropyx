@@ -28,10 +28,14 @@ public class HtmlReporter
             .Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
             .OrderByDescending(f => f.SmellsHigh * 3 + f.SmellsMedium * 2 + f.SmellsLow)
             .Take(TopFilesCount).ToList();
+        var coupledFiles = latestFiles
+            .Where(f => f.CouplingProxy > 0)
+            .OrderByDescending(f => f.CouplingProxy)
+            .Take(TopFilesCount).ToList();
 
         double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, latestFiles, badness);
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness);
     }
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
@@ -262,7 +266,7 @@ public class HtmlReporter
                       <summary>All {{files.Count}} file(s) sorted by badness <span class="summary-meta">click to expand/collapse</span></summary>
                       <div class="details-body">
                         <table>
-                          <thead><tr><th>File</th><th>Language</th><th style="text-align:right">SLOC</th><th style="text-align:right">CC</th><th style="text-align:right">MI</th><th style="text-align:right">Smells H/M/L</th><th style="text-align:right">Badness</th></tr></thead>
+                          <thead><tr><th>File</th><th>Language</th><th style="text-align:right">SLOC</th><th style="text-align:right">CC</th><th style="text-align:right">MI</th><th style="text-align:right">Coupling</th><th style="text-align:right">Smells H/M/L</th><th style="text-align:right">Badness</th></tr></thead>
                           <tbody>
             """);
 
@@ -278,6 +282,7 @@ public class HtmlReporter
                               <td style="text-align:right">{{file.Sloc.ToString("N0", CultureInfo.InvariantCulture)}} {{slocBadge}}</td>
                               <td style="text-align:right">{{file.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture)}} {{CcBadge(file.CyclomaticComplexity)}}</td>
                               <td style="text-align:right">{{file.MaintainabilityIndex.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                              <td style="text-align:right">{{file.CouplingProxy.ToString("F0", CultureInfo.InvariantCulture)}} {{CouplingBadge(file.CouplingProxy)}}</td>
                               <td style="text-align:right">{{file.SmellsHigh}}/{{file.SmellsMedium}}/{{file.SmellsLow}} {{SmellBadge(file.SmellsHigh, file.SmellsMedium, file.SmellsLow)}}</td>
                               <td style="text-align:right"><span style="color:{{color}}">{{b.ToString("F3", CultureInfo.InvariantCulture)}}</span></td>
                             </tr>
@@ -338,6 +343,7 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> largeFiles,
         IReadOnlyList<FileMetrics> complexFiles,
         IReadOnlyList<FileMetrics> smellyFiles,
+        IReadOnlyList<FileMetrics> coupledFiles,
         IReadOnlyList<FileMetrics> latestFiles,
         double[] badness)
     {
@@ -351,7 +357,7 @@ public class HtmlReporter
         AppendEntropyChart(sb, ordered);
         AppendGrowthChart(sb, ordered);
         AppendHeatmapSection(sb, latestFiles, badness);
-        AppendIssuesSection(sb, largeFiles, complexFiles, smellyFiles);
+        AppendIssuesSection(sb, largeFiles, complexFiles, smellyFiles, coupledFiles);
         AppendTroubledSection(sb, troubled);
         AppendHeroicSection(sb, heroic);
         AppendCommitTableSection(sb, deltas);
@@ -582,7 +588,8 @@ public class HtmlReporter
     private static void AppendIssuesSection(StringBuilder sb,
         IReadOnlyList<FileMetrics> largeFiles,
         IReadOnlyList<FileMetrics> complexFiles,
-        IReadOnlyList<FileMetrics> smellyFiles)
+        IReadOnlyList<FileMetrics> smellyFiles,
+        IReadOnlyList<FileMetrics> coupledFiles)
     {
         sb.AppendLine("""
                 <section>
@@ -623,6 +630,18 @@ public class HtmlReporter
             """);
         AppendFileTable(sb, smellyFiles, "Smells H/M/L", f => $"{f.SmellsHigh}/{f.SmellsMedium}/{f.SmellsLow}",
             f => SmellBadge(f.SmellsHigh, f.SmellsMedium, f.SmellsLow));
+        sb.AppendLine("      </div></details></div>");
+
+        // High coupling
+        sb.AppendLine("""
+                  <div class="card" style="margin-bottom:1.5rem">
+                    <h2>🔗 High Coupling Areas</h2>
+                    <details open>
+                      <summary>Top files by Coupling (import count) <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
+            """);
+        AppendFileTable(sb, coupledFiles, "Coupling", f => f.CouplingProxy.ToString("F0", CultureInfo.InvariantCulture),
+            f => CouplingBadge(f.CouplingProxy));
         sb.AppendLine("      </div></details></div>");
 
         sb.AppendLine("</section>");
@@ -957,6 +976,7 @@ public class HtmlReporter
                     smellsHigh = x.First.SmellsHigh,
                     smellsMedium = x.First.SmellsMedium,
                     smellsLow = x.First.SmellsLow,
+                    couplingProxy = x.First.CouplingProxy,
                     badness = x.Second,
                     kind = x.First.Kind.ToString()
                 }).ToList()
@@ -1050,6 +1070,14 @@ public class HtmlReporter
             _ => """<span class="badge badge-green">Clean</span>"""
         };
     }
+
+    private static string CouplingBadge(double coupling) => coupling switch
+    {
+        > 20 => """<span class="badge badge-red">Very High</span>""",
+        > 10 => """<span class="badge badge-yellow">High</span>""",
+        > 5 => """<span class="badge badge-gray">Moderate</span>""",
+        _ => """<span class="badge badge-green">Low</span>"""
+    };
 
     private static string EscapeHtml(string text) =>
         text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");

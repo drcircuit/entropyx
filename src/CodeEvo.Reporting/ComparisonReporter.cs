@@ -20,6 +20,7 @@ public record DataJsonFileEntry(
     int SmellsHigh,
     int SmellsMedium,
     int SmellsLow,
+    double CouplingProxy,
     double Badness,
     string Kind = "Production");
 
@@ -75,6 +76,7 @@ public class DataJsonReport
                     lf.TryGetProperty("smellsHigh",            out var sh) ? sh.GetInt32()       : 0,
                     lf.TryGetProperty("smellsMedium",          out var sm) ? sm.GetInt32()       : 0,
                     lf.TryGetProperty("smellsLow",             out var slo)? slo.GetInt32()      : 0,
+                    lf.TryGetProperty("couplingProxy",         out var cp) ? cp.GetDouble()      : 0,
                     lf.TryGetProperty("badness",               out var b)  ? b.GetDouble()       : 0,
                     lf.TryGetProperty("kind",                  out var ki) ? ki.GetString() ?? "Production" : "Production"));
             }
