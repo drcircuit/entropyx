@@ -6,6 +6,12 @@ namespace CodeEvo.Core;
 public class ScanPipeline
 {
     private readonly GitTraversal _git = new();
+    private readonly ILizardAnalyzer? _lizard;
+
+    public ScanPipeline(ILizardAnalyzer? lizard = null)
+    {
+        _lizard = lizard;
+    }
 
     public (IReadOnlyList<FileMetrics> Files, RepoMetrics Repo) ScanCommit(CommitInfo commit, string repoPath)
     {
@@ -53,6 +59,9 @@ public class ScanPipeline
 
     public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath, string[]? includePatterns = null)
     {
+        var lizardResults = _lizard?.AnalyzeDirectory(dirPath)
+            ?? new Dictionary<string, LizardFileResult>();
+
         return Directory
             .EnumerateFiles(dirPath, "*", new EnumerationOptions
             {
@@ -70,21 +79,32 @@ public class ScanPipeline
                 catch (UnauthorizedAccessException) { return null; }
                 var sloc = SlocCounter.CountSloc(lines, language);
                 var relativePath = Path.GetRelativePath(dirPath, filePath);
+                lizardResults.TryGetValue(relativePath, out var lizard);
+                var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
+                var mi = ComputeMaintainabilityIndex(sloc, avgCc);
                 return new FileMetrics(
                     CommitHash: string.Empty,
                     Path: relativePath,
                     Language: language,
                     Sloc: sloc,
-                    CyclomaticComplexity: 0,
-                    MaintainabilityIndex: 0,
-                    SmellsHigh: 0,
-                    SmellsMedium: 0,
-                    SmellsLow: 0,
+                    CyclomaticComplexity: avgCc,
+                    MaintainabilityIndex: mi,
+                    SmellsHigh: lizard?.SmellsHigh ?? 0,
+                    SmellsMedium: lizard?.SmellsMedium ?? 0,
+                    SmellsLow: lizard?.SmellsLow ?? 0,
                     CouplingProxy: 0,
                     MaintainabilityProxy: 0);
             })
             .Where(f => f is not null)
             .Select(f => f!)
             .ToList();
+    }
+
+    private static double ComputeMaintainabilityIndex(int sloc, double avgCyclomaticComplexity)
+    {
+        // Simplified Maintainability Index (0–100) without Halstead Volume:
+        // MI = max(0, (171 − 0.23 × CC − 16.2 × ln(LOC)) × 100 / 171)
+        var mi = (171.0 - 0.23 * avgCyclomaticComplexity - 16.2 * Math.Log(Math.Max(1, sloc))) * 100.0 / 171.0;
+        return Math.Max(0.0, mi);
     }
 }

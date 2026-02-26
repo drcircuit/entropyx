@@ -41,7 +41,7 @@ scanHereCommand.AddOption(scanHereIncludeOption);
 scanHereCommand.SetHandler((string path, string? include) =>
 {
     var includePatterns = ParsePatterns(include);
-    var pipeline = new ScanPipeline();
+    var pipeline = new ScanPipeline(new LizardAnalyzer());
     var reporter = new ConsoleReporter();
     IReadOnlyList<FileMetrics> files = [];
     AnsiConsole.Status()
