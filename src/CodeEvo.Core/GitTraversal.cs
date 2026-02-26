@@ -36,6 +36,45 @@ public class GitTraversal
         }
     }
 
+    /// <summary>
+    /// Returns every file path that exists in the repository tree at
+    /// <paramref name="commitHash"/>, recursively, excluding paths whose
+    /// directory segments match <see cref="ScanFilter.DefaultIgnoredDirectories"/>.
+    /// </summary>
+    public IEnumerable<string> GetAllFilesAtCommit(string repoPath, string commitHash)
+    {
+        using var repo = new Repository(repoPath);
+        var commit = repo.Lookup<Commit>(commitHash);
+        if (commit == null)
+            yield break;
+
+        foreach (var path in WalkTree(commit.Tree, string.Empty))
+            yield return path;
+    }
+
+    private static IEnumerable<string> WalkTree(Tree tree, string prefix)
+    {
+        foreach (var entry in tree)
+        {
+            if (entry.TargetType == TreeEntryTargetType.Tree)
+            {
+                // Skip ignored directory segments
+                if (ScanFilter.DefaultIgnoredDirectories.Contains(entry.Name))
+                    continue;
+                // Git tree paths always use '/' as the separator regardless of OS.
+                // Using '/' explicitly (not Path.Combine) preserves git-convention paths
+                // that LibGit2Sharp's Tree indexer requires for blob lookups.
+                var subPrefix = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
+                foreach (var child in WalkTree((Tree)entry.Target, subPrefix))
+                    yield return child;
+            }
+            else if (entry.TargetType == TreeEntryTargetType.Blob)
+            {
+                yield return prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
+            }
+        }
+    }
+
     public IEnumerable<string> GetChangedFiles(string repoPath, string commitHash)
     {
         using var repo = new Repository(repoPath);
