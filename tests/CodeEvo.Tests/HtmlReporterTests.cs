@@ -958,6 +958,39 @@ public class HtmlReporterTests
     }
 
     [Fact]
+    public void ExportSvgFigures_UsesSamePointBudgetAsHtmlCharts()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = Enumerable.Range(0, 300)
+                .Select(i => (
+                    new CommitInfo($"c{i}", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero).AddDays(i), []),
+                    new RepoMetrics($"c{i}", 10 + i, 100 + i, 0.5 + i * 0.001)))
+                .ToList();
+
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+            var marker = "<polyline points=\"";
+            var start = svg.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(start >= 0, "polyline points attribute not found");
+            start += marker.Length;
+            var end = svg.IndexOf("\"", start, StringComparison.Ordinal);
+            Assert.True(end > start, "polyline points closing quote not found");
+            var points = svg[start..end]
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            Assert.Equal(300, points.Length);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ExportSvgFigures_WithRepositoryName_IncludesNameInFigureTitle()
     {
         var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");

@@ -1452,7 +1452,7 @@ public class HtmlReporter
     {
         Directory.CreateDirectory(outputDir);
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
-        var sampled = Downsample(ordered, 200);
+        var sampled = Downsample(ordered, MaxChartPoints);
 
         var entropyPts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1477,7 +1477,7 @@ public class HtmlReporter
 
         if (commitStats is { Count: > 0 })
         {
-            var sampledStats = Downsample(commitStats, 200);
+            var sampledStats = Downsample(commitStats, MaxChartPoints);
 
             var ccPts = sampledStats
                 .Select(s => (s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
