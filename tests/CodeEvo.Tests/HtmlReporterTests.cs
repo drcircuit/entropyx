@@ -302,6 +302,87 @@ public class HtmlReporterTests
     }
 
     [Fact]
+    public void Generate_HighComplexityTable_ExcludesZeroCcFiles()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("low.cs",  sloc: 500, cc: 0.0),  // no CC — should NOT appear in high-complexity table
+            MakeFileMetrics("high.cs", sloc: 50,  cc: 25.0), // high CC — should appear
+        };
+
+        var html = reporter.Generate(history, files);
+
+        // The high-complexity section must list high.cs and NOT low.cs
+        // Find the High Complexity Areas section and check its content
+        int sectionIdx = html.IndexOf("High Complexity Areas", StringComparison.Ordinal);
+        Assert.True(sectionIdx >= 0, "High Complexity Areas section not found");
+        int nextSectionIdx = html.IndexOf("Smelly Areas", StringComparison.Ordinal);
+        Assert.True(nextSectionIdx > sectionIdx, "Smelly Areas section not found after High Complexity Areas");
+        var section = html[sectionIdx..nextSectionIdx];
+        Assert.Contains("high.cs", section);
+        Assert.DoesNotContain("low.cs", section);
+    }
+
+    [Fact]
+    public void Generate_SmellyAreasTable_ExcludesCleanFiles()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a"), MakeRepoMetrics("a", 0.5)),
+        };
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("clean.cs", sloc: 500, smellsHigh: 0, smellsMed: 0, smellsLow: 0), // no smells
+            MakeFileMetrics("smelly.cs", sloc: 50, smellsHigh: 3),                              // smelly
+        };
+
+        var html = reporter.Generate(history, files);
+
+        int sectionIdx = html.IndexOf("Smelly Areas", StringComparison.Ordinal);
+        Assert.True(sectionIdx >= 0, "Smelly Areas section not found");
+        int nextSectionIdx = html.IndexOf("Troubled Commits", StringComparison.Ordinal);
+        Assert.True(nextSectionIdx > sectionIdx, "Troubled Commits section not found after Smelly Areas");
+        var section = html[sectionIdx..nextSectionIdx];
+        Assert.Contains("smelly.cs", section);
+        Assert.DoesNotContain("clean.cs", section);
+    }
+
+    [Fact]
+    public void Generate_TroubledAndHeroicSections_HaveAccordions()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 6), MakeRepoMetrics("a", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("b", 5), MakeRepoMetrics("b", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("c", 4), MakeRepoMetrics("c", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("d", 3), MakeRepoMetrics("d", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("e", 2), MakeRepoMetrics("e", 0.1, files: 3, sloc: 100)),
+            (MakeCommit("f", 1), MakeRepoMetrics("f", 5.0, files: 10, sloc: 500)),
+            (MakeCommit("g", 0), MakeRepoMetrics("g", 5.0, files: 10, sloc: 500)),
+        };
+        var html = reporter.Generate(history, []);
+
+        int troubledIdx = html.IndexOf("Troubled Commits", StringComparison.Ordinal);
+        int heroicIdx   = html.IndexOf("Heroic Commits",   StringComparison.Ordinal);
+        Assert.True(troubledIdx >= 0, "Troubled Commits section not found");
+        Assert.True(heroicIdx   >= 0, "Heroic Commits section not found");
+
+        // Both sections must contain a <details> accordion
+        var troubledSection = html[troubledIdx..heroicIdx];
+        Assert.Contains("<details", troubledSection);
+
+        var heroicSection = html[heroicIdx..];
+        Assert.Contains("<details", heroicSection);
+    }
+
+    [Fact]
     public void Generate_ContainsEntropyBadge()
     {
         var reporter = new HtmlReporter();
