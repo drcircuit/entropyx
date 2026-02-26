@@ -76,7 +76,7 @@ public static class ScanFilter
     }
 
     /// <summary>Simple glob match supporting leading-wildcard (*.ext), trailing-wildcard (prefix*),
-    /// full-wildcard (*), and exact (case-insensitive) comparisons.</summary>
+    /// full-wildcard (*), extension-only (.ext), and exact (case-insensitive) comparisons.</summary>
     private static bool MatchGlob(string fileName, string pattern)
     {
         if (pattern == "*") return true;
@@ -88,6 +88,10 @@ public static class ScanFilter
         // prefix*
         if (pattern.EndsWith('*') && !pattern[..^1].Contains('*'))
             return fileName.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase);
+
+        // .ext → match any file whose name ends with .ext (e.g. ".ico" matches "icon.ico")
+        if (pattern.StartsWith('.') && !pattern.Contains('*'))
+            return fileName.EndsWith(pattern, StringComparison.OrdinalIgnoreCase);
 
         // exact name match
         return string.Equals(fileName, pattern, StringComparison.OrdinalIgnoreCase);
