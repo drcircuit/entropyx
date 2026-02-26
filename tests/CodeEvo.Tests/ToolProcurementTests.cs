@@ -50,7 +50,7 @@ public class ToolProcurementTests
     [InlineData("git", "windows", "winget install --id Git.Git")]
     [InlineData("cloc", "linux", "sudo apt-get install cloc")]
     [InlineData("cloc", "macos", "brew install cloc")]
-    [InlineData("cloc", "windows", "winget install cloc")]
+    [InlineData("cloc", "windows", "winget install AlDanial.Cloc")]
     public void GetInstallInstructions_KnownTools_ReturnCorrectInstructions(string tool, string platform, string expected)
     {
         var procurement = new ToolProcurement();

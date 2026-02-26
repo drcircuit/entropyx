@@ -35,7 +35,7 @@ public class ToolProcurement
             ("git", "windows") => "winget install --id Git.Git",
             ("cloc", "linux") => "sudo apt-get install cloc",
             ("cloc", "macos") => "brew install cloc",
-            ("cloc", "windows") => "winget install cloc",
+            ("cloc", "windows") => "winget install AlDanial.Cloc",
             ("lizard", _) => "pip install lizard",
             _ => $"Please install '{toolName}' for platform '{platform}' manually."
         };
