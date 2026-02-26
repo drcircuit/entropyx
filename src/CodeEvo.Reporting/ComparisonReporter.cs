@@ -724,9 +724,30 @@ public class ComparisonReporter
 
         sb.AppendLine("<script>");
         sb.AppendLine("(function() {");
-        sb.AppendLine($"  var bLabels=[{bLabels}],bData=[{bData}],cLabels=[{cLabels}],cData=[{cData}];");
-        sb.AppendLine("  function mkDs(lbl,data,col,bg,pr){return{label:lbl,data:data.map((v,i)=>({x:i,y:+v})),borderColor:col,backgroundColor:bg,borderWidth:2,pointRadius:pr,tension:0.3,parsing:false};}");
-        sb.AppendLine($"  new Chart(document.getElementById('trendChart').getContext('2d'),{{type:'line',data:{{labels:bLabels.length>=cLabels.length?bLabels:cLabels,datasets:[mkDs('Baseline',bData,'#60a5fa','rgba(96,165,250,.1)',{(bHistory.Count <= 1 ? 5 : 0)}),mkDs('Current',cData,'#f97316','rgba(249,115,22,.1)',{(cHistory.Count <= 1 ? 5 : 0)})]}},options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{labels:{{color:'#888'}}}}}},scales:{{x:{{type:'linear',ticks:{{color:'#888'}},grid:{{color:'#2d3044'}}}},y:{{ticks:{{color:'#888'}},grid:{{color:'#2d3044'}}}}}}}}}});");
+        sb.AppendLine($"  var bLabels=[{bLabels}], bData=[{bData}], cLabels=[{cLabels}], cData=[{cData}];");
+        sb.AppendLine("  function mkDs(lbl, data, col, bg, pr) {");
+        sb.AppendLine("    return { label: lbl, data: data.map((v,i) => ({x:i, y:+v})),");
+        sb.AppendLine("             borderColor: col, backgroundColor: bg, borderWidth: 2,");
+        sb.AppendLine("             pointRadius: pr, tension: 0.3, parsing: false };");
+        sb.AppendLine("  }");
+        sb.AppendLine($"  var bPr={(bHistory.Count <= 1 ? 5 : 0)}, cPr={(cHistory.Count <= 1 ? 5 : 0)};");
+        sb.AppendLine("  var ctx = document.getElementById('trendChart').getContext('2d');");
+        sb.AppendLine("  new Chart(ctx, {");
+        sb.AppendLine("    type: 'line',");
+        sb.AppendLine("    data: {");
+        sb.AppendLine("      labels: bLabels.length >= cLabels.length ? bLabels : cLabels,");
+        sb.AppendLine("      datasets: [mkDs('Baseline', bData, '#60a5fa', 'rgba(96,165,250,.1)', bPr),");
+        sb.AppendLine("                 mkDs('Current',  cData, '#f97316', 'rgba(249,115,22,.1)',  cPr)]");
+        sb.AppendLine("    },");
+        sb.AppendLine("    options: {");
+        sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
+        sb.AppendLine("      plugins: { legend: { labels: { color: '#888' } } },");
+        sb.AppendLine("      scales: {");
+        sb.AppendLine("        x: { type: 'linear', ticks: { color: '#888' }, grid: { color: '#2d3044' } },");
+        sb.AppendLine("        y: { ticks: { color: '#888' }, grid: { color: '#2d3044' } }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        sb.AppendLine("  });");
         sb.AppendLine("})();");
         sb.AppendLine("</script>");
     }

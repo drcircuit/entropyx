@@ -155,7 +155,7 @@ public class ConsoleReporter
         var top = files.Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
             .OrderByDescending(WeightedSmells).Take(topN).ToList();
         RenderBarChart(top, "[bold]Top files by Code Smells (weighted H×3 + M×2 + L×1)[/]",
-            f => (Path.GetFileName(f.Path), (double)WeightedSmells(f), SmellColor(WeightedSmells(f))));
+            f => { var s = WeightedSmells(f); return (Path.GetFileName(f.Path), (double)s, SmellColor(s)); });
     }
 
     private static void RenderBarChart<T>(List<T> items, string label,
