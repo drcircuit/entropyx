@@ -20,8 +20,12 @@ public class HtmlReporter
         var (troubled, heroic) = ClassifyCommits(deltas);
 
         var largeFiles = latestFiles.OrderByDescending(f => f.Sloc).Take(TopFilesCount).ToList();
-        var complexFiles = latestFiles.OrderByDescending(f => f.CyclomaticComplexity).Take(TopFilesCount).ToList();
+        var complexFiles = latestFiles
+            .Where(f => f.CyclomaticComplexity > 0)
+            .OrderByDescending(f => f.CyclomaticComplexity)
+            .Take(TopFilesCount).ToList();
         var smellyFiles = latestFiles
+            .Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
             .OrderByDescending(f => f.SmellsHigh * 3 + f.SmellsMedium * 2 + f.SmellsLow)
             .Take(TopFilesCount).ToList();
 
@@ -654,11 +658,14 @@ public class HtmlReporter
 
     private static void AppendTroubledSection(StringBuilder sb, IReadOnlyList<CommitDelta> troubled)
     {
-        sb.AppendLine("""
+        sb.AppendLine($$"""
                 <section>
                   <div class="card">
                     <h2>😈 Troubled Commits</h2>
                     <p style="color:var(--muted);margin-bottom:1rem;font-size:13px">Commits that significantly worsened codebase entropy.</p>
+                    <details open>
+                      <summary>{{troubled.Count}} commit(s) that increased entropy <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
             """);
         if (troubled.Count == 0)
         {
@@ -668,16 +675,19 @@ public class HtmlReporter
         {
             AppendDeltaTable(sb, troubled, isHeroic: false);
         }
-        sb.AppendLine("  </div></section>");
+        sb.AppendLine("      </div></details></div></section>");
     }
 
     private static void AppendHeroicSection(StringBuilder sb, IReadOnlyList<CommitDelta> heroic)
     {
-        sb.AppendLine("""
+        sb.AppendLine($$"""
                 <section>
                   <div class="card">
                     <h2>🦸 Heroic Commits</h2>
                     <p style="color:var(--muted);margin-bottom:1rem;font-size:13px">Commits that significantly improved codebase entropy.</p>
+                    <details open>
+                      <summary>{{heroic.Count}} commit(s) that improved entropy <span class="summary-meta">click to expand/collapse</span></summary>
+                      <div class="details-body">
             """);
         if (heroic.Count == 0)
         {
@@ -687,7 +697,7 @@ public class HtmlReporter
         {
             AppendDeltaTable(sb, heroic, isHeroic: true);
         }
-        sb.AppendLine("  </div></section>");
+        sb.AppendLine("      </div></details></div></section>");
     }
 
     private static void AppendDeltaTable(StringBuilder sb, IReadOnlyList<CommitDelta> deltas, bool isHeroic)
