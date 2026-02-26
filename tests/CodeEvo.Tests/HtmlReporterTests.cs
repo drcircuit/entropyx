@@ -383,4 +383,63 @@ public class HtmlReporterTests
         Assert.Contains("\"badness\"", json);
         Assert.Contains("\"cyclomaticComplexity\"", json);
     }
+
+    // ── GenerateDataJson (ad hoc snapshot overload) ───────────────────────────
+
+    [Fact]
+    public void GenerateDataJson_AdHoc_EmptyFiles_ReturnsValidJson()
+    {
+        var json = HtmlReporter.GenerateDataJson((IReadOnlyList<FileMetrics>)[]);
+        Assert.False(string.IsNullOrWhiteSpace(json));
+        Assert.Contains("\"commitCount\": 1", json);
+        Assert.Contains("\"history\"", json);
+        Assert.Contains("\"latestFiles\"", json);
+    }
+
+    [Fact]
+    public void GenerateDataJson_AdHoc_ContainsSingleSnapshotEntry()
+    {
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/A.cs", sloc: 100, cc: 4.0),
+            MakeFileMetrics("src/B.cs", sloc: 200, cc: 8.0),
+        };
+
+        var json = HtmlReporter.GenerateDataJson((IReadOnlyList<FileMetrics>)files);
+
+        Assert.Contains("\"commitCount\": 1", json);
+        Assert.Contains("\"entropy\"", json);
+        Assert.Contains("\"files\"", json);
+        Assert.Contains("\"sloc\"", json);
+    }
+
+    [Fact]
+    public void GenerateDataJson_AdHoc_ContainsFileData()
+    {
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/Foo.cs", sloc: 150, cc: 8.0, smellsHigh: 1),
+        };
+
+        var json = HtmlReporter.GenerateDataJson((IReadOnlyList<FileMetrics>)files);
+
+        Assert.Contains("\"src/Foo.cs\"", json);
+        Assert.Contains("\"badness\"", json);
+        Assert.Contains("\"cyclomaticComplexity\"", json);
+    }
+
+    [Fact]
+    public void GenerateDataJson_AdHoc_SlocsMatchTotalFiles()
+    {
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("a.cs", sloc: 100),
+            MakeFileMetrics("b.cs", sloc: 200),
+        };
+
+        var json = HtmlReporter.GenerateDataJson((IReadOnlyList<FileMetrics>)files);
+
+        Assert.Contains("\"sloc\": 300", json);
+        Assert.Contains("\"files\": 2", json);
+    }
 }
