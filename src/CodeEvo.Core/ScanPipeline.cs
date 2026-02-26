@@ -51,32 +51,40 @@ public class ScanPipeline
         return (fileMetrics, repoMetrics);
     }
 
-    public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath)
+    public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath, string[]? includePatterns = null)
     {
-        var result = new List<FileMetrics>();
-        foreach (var filePath in Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories))
-        {
-            var language = LanguageDetector.Detect(filePath);
-            string[] lines;
-            try { lines = File.ReadAllLines(filePath); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-
-            var sloc = SlocCounter.CountSloc(lines, language);
-            var relativePath = Path.GetRelativePath(dirPath, filePath);
-            result.Add(new FileMetrics(
-                CommitHash: string.Empty,
-                Path: relativePath,
-                Language: language,
-                Sloc: sloc,
-                CyclomaticComplexity: 0,
-                MaintainabilityIndex: 0,
-                SmellsHigh: 0,
-                SmellsMedium: 0,
-                SmellsLow: 0,
-                CouplingProxy: 0,
-                MaintainabilityProxy: 0));
-        }
-        return result;
+        return Directory
+            .EnumerateFiles(dirPath, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true
+            })
+            .AsParallel()
+            .Where(f => !ScanFilter.IsPathIgnored(f, dirPath) && ScanFilter.MatchesFilter(f, includePatterns))
+            .Select(filePath =>
+            {
+                var language = LanguageDetector.Detect(filePath);
+                string[] lines;
+                try { lines = File.ReadAllLines(filePath); }
+                catch (IOException) { return null; }
+                catch (UnauthorizedAccessException) { return null; }
+                var sloc = SlocCounter.CountSloc(lines, language);
+                var relativePath = Path.GetRelativePath(dirPath, filePath);
+                return new FileMetrics(
+                    CommitHash: string.Empty,
+                    Path: relativePath,
+                    Language: language,
+                    Sloc: sloc,
+                    CyclomaticComplexity: 0,
+                    MaintainabilityIndex: 0,
+                    SmellsHigh: 0,
+                    SmellsMedium: 0,
+                    SmellsLow: 0,
+                    CouplingProxy: 0,
+                    MaintainabilityProxy: 0);
+            })
+            .Where(f => f is not null)
+            .Select(f => f!)
+            .ToList();
     }
 }
