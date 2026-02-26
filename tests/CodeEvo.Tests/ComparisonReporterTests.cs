@@ -98,53 +98,130 @@ public class ComparisonReporterTests
         Assert.Null(report.Summary);
     }
 
-    // ── BuildAssessment ───────────────────────────────────────────────────────
+    // ── BuildAssessment – weather forecast verdicts ───────────────────────────
 
     [Fact]
-    public void BuildAssessment_EntropyDecreased_VerdictImproving()
+    public void BuildAssessment_FlatHistory_VerdictStable()
     {
-        var baseline = MakeReport(entropy: 2.0);
-        var current  = MakeReport(entropy: 1.5);
-
-        var result = ComparisonReporter.BuildAssessment(baseline, current);
-
-        Assert.Equal(Verdict.Improving, result.Verdict);
-        Assert.Contains("Improving", result.VerdictLabel);
-    }
-
-    [Fact]
-    public void BuildAssessment_EntropyIncreasedLarge_VerdictRegressing()
-    {
+        // Perfectly flat history → no trend, tiny delta
+        var flatHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 1.0, 5, 100),
+            new("b", "2024-01-02", 1.05, 5, 100),
+            new("c", "2024-01-03", 0.95, 5, 100),
+            new("d", "2024-01-04", 1.0, 5, 100),
+        };
         var baseline = MakeReport(entropy: 1.0);
-        var current  = MakeReport(entropy: 1.5);
-
-        var result = ComparisonReporter.BuildAssessment(baseline, current);
-
-        Assert.Equal(Verdict.Regressing, result.Verdict);
-        Assert.Contains("Regressing", result.VerdictLabel);
-    }
-
-    [Fact]
-    public void BuildAssessment_HighEntropyStillRising_VerdictCritical()
-    {
-        var baseline = MakeReport(entropy: 2.0);
-        var current  = MakeReport(entropy: 2.5);
-
-        var result = ComparisonReporter.BuildAssessment(baseline, current);
-
-        Assert.Equal(Verdict.Critical, result.Verdict);
-        Assert.Contains("Critical", result.VerdictLabel);
-    }
-
-    [Fact]
-    public void BuildAssessment_EntropySameWithinTolerance_VerdictStable()
-    {
-        var baseline = MakeReport(entropy: 1.0);
-        var current  = MakeReport(entropy: 1.05); // < 0.1 delta and < 10% relative
+        var current  = MakeReport(entropy: 1.0, history: flatHistory);
 
         var result = ComparisonReporter.BuildAssessment(baseline, current);
 
         Assert.Equal(Verdict.Stable, result.Verdict);
+        Assert.Contains("Stable", result.VerdictLabel);
+    }
+
+    [Fact]
+    public void BuildAssessment_SteadilyRisingEntropy_VerdictWarming()
+    {
+        // Current history shows steady upward trend; overall delta > 0.01
+        var warmingHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 0.8, 5, 100),
+            new("c", "2024-01-03", 1.1, 5, 100),
+            new("d", "2024-01-04", 1.4, 5, 100),
+        };
+        var baseline = MakeReport(entropy: 0.5);
+        var current  = MakeReport(entropy: 1.4, history: warmingHistory);
+
+        var result = ComparisonReporter.BuildAssessment(baseline, current);
+
+        Assert.Equal(Verdict.Warming, result.Verdict);
+        Assert.Contains("Warming", result.VerdictLabel);
+    }
+
+    [Fact]
+    public void BuildAssessment_SteadilyFallingEntropy_VerdictCooling()
+    {
+        // Declining trend with one small blip — not a clean ColdFront (all-declining) pattern
+        var coolingHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 2.0, 5, 100),
+            new("b", "2024-01-02", 1.7, 5, 100),
+            new("c", "2024-01-03", 1.5, 5, 100),
+            new("d", "2024-01-04", 1.6, 5, 100),  // small blip up: ColdFront requires ≥70% declining
+            new("e", "2024-01-05", 1.1, 5, 100),
+        };
+        var baseline = MakeReport(entropy: 2.0);
+        var current  = MakeReport(entropy: 1.1, history: coolingHistory);
+
+        var result = ComparisonReporter.BuildAssessment(baseline, current);
+
+        Assert.Equal(Verdict.Cooling, result.Verdict);
+        Assert.Contains("Cooling", result.VerdictLabel);
+    }
+
+    [Fact]
+    public void BuildAssessment_SharpEntropySpike_VerdictHeatSpike()
+    {
+        // Five flat commits then one huge jump → DetectHeatSpike = true
+        var spikeHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 0.5, 5, 100),
+            new("c", "2024-01-03", 0.5, 5, 100),
+            new("d", "2024-01-04", 0.5, 5, 100),
+            new("e", "2024-01-05", 2.5, 5, 100),
+        };
+        var baseline = MakeReport(entropy: 0.5);
+        var current  = MakeReport(entropy: 2.5, history: spikeHistory);
+
+        var result = ComparisonReporter.BuildAssessment(baseline, current);
+
+        Assert.Equal(Verdict.HeatSpike, result.Verdict);
+        Assert.Contains("Heat Spike", result.VerdictLabel);
+    }
+
+    [Fact]
+    public void BuildAssessment_SustainedElevation_VerdictHeatWave()
+    {
+        // Two low points, then elevation jumps and STAYS flat (stable elevated window)
+        var heatWaveHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.4, 5, 100),
+            new("b", "2024-01-02", 0.4, 5, 100),
+            new("c", "2024-01-03", 1.5, 5, 100),
+            new("d", "2024-01-04", 1.6, 5, 100),
+            new("e", "2024-01-05", 1.5, 5, 100),
+        };
+        var baseline = MakeReport(entropy: 0.4);
+        var current  = MakeReport(entropy: 1.5, history: heatWaveHistory);
+
+        var result = ComparisonReporter.BuildAssessment(baseline, current);
+
+        Assert.Equal(Verdict.HeatWave, result.Verdict);
+        Assert.Contains("Heat Wave", result.VerdictLabel);
+    }
+
+    [Fact]
+    public void BuildAssessment_SustainedDropAfterHigh_VerdictColdFront()
+    {
+        // Entropy was high then dropped consistently over several commits
+        var coldFrontHistory = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 2.0, 5, 100),
+            new("b", "2024-01-02", 1.7, 5, 100),
+            new("c", "2024-01-03", 1.4, 5, 100),
+            new("d", "2024-01-04", 1.1, 5, 100),
+            new("e", "2024-01-05", 0.8, 5, 100),
+        };
+        var baseline = MakeReport(entropy: 2.0);
+        var current  = MakeReport(entropy: 0.8, history: coldFrontHistory);
+
+        var result = ComparisonReporter.BuildAssessment(baseline, current);
+
+        Assert.Equal(Verdict.ColdFront, result.Verdict);
+        Assert.Contains("Cold Front", result.VerdictLabel);
     }
 
     [Fact]
@@ -157,6 +234,149 @@ public class ComparisonReporterTests
 
         Assert.NotEmpty(result.Observations);
         Assert.Contains(result.Observations, o => o.Contains("EntropyX"));
+    }
+
+    // ── DetectHeatSpike ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void DetectHeatSpike_FlatThenBigJump_ReturnsTrue()
+    {
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 0.5, 5, 100),
+            new("c", "2024-01-03", 0.5, 5, 100),
+            new("d", "2024-01-04", 0.5, 5, 100),
+            new("e", "2024-01-05", 2.5, 5, 100),
+        };
+        Assert.True(ComparisonReporter.DetectHeatSpike(history));
+    }
+
+    [Fact]
+    public void DetectHeatSpike_SteadyRise_ReturnsFalse()
+    {
+        // Uniform rise — no single outlier step
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 0.8, 5, 100),
+            new("c", "2024-01-03", 1.1, 5, 100),
+            new("d", "2024-01-04", 1.4, 5, 100),
+        };
+        Assert.False(ComparisonReporter.DetectHeatSpike(history));
+    }
+
+    [Fact]
+    public void DetectHeatSpike_TooShortHistory_ReturnsFalse()
+    {
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 1.0, 5, 100),
+            new("b", "2024-01-02", 3.0, 5, 100),
+        };
+        Assert.False(ComparisonReporter.DetectHeatSpike(history));
+    }
+
+    // ── DetectHeatWave ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DetectHeatWave_LastThreeElevatedAndStable_ReturnsTrue()
+    {
+        // 2 low entries then 3 entries at a stable elevated level (needs 5 entries for minWindow+2=5)
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.4, 5, 100),
+            new("b", "2024-01-02", 0.4, 5, 100),
+            new("c", "2024-01-03", 1.5, 5, 100),
+            new("d", "2024-01-04", 1.6, 5, 100),
+            new("e", "2024-01-05", 1.5, 5, 100),
+        };
+        Assert.True(ComparisonReporter.DetectHeatWave(history));
+    }
+
+    [Fact]
+    public void DetectHeatWave_StillClimbingInWindow_ReturnsFalse()
+    {
+        // All points rise uniformly — not a stable elevated plateau (window still climbing)
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.4, 5, 100),
+            new("b", "2024-01-02", 0.7, 5, 100),
+            new("c", "2024-01-03", 1.0, 5, 100),
+            new("d", "2024-01-04", 1.3, 5, 100),
+            new("e", "2024-01-05", 1.6, 5, 100),
+        };
+        Assert.False(ComparisonReporter.DetectHeatWave(history));
+    }
+
+    [Fact]
+    public void DetectHeatWave_LastEntryDropsBelow_ReturnsFalse()
+    {
+        // Same 5-entry setup but last entry drops back near reference level
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.4, 5, 100),
+            new("b", "2024-01-02", 0.4, 5, 100),
+            new("c", "2024-01-03", 1.5, 5, 100),
+            new("d", "2024-01-04", 1.6, 5, 100),
+            new("e", "2024-01-05", 0.45, 5, 100),  // drops back to near-reference
+        };
+        Assert.False(ComparisonReporter.DetectHeatWave(history));
+    }
+
+    [Fact]
+    public void DetectHeatWave_TooShortHistory_ReturnsFalse()
+    {
+        // minWindow=3 requires Count >= minWindow+2 = 5; only 4 entries here
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 1.5, 5, 100),
+            new("c", "2024-01-03", 1.5, 5, 100),
+            new("d", "2024-01-04", 1.5, 5, 100),
+        };
+        Assert.False(ComparisonReporter.DetectHeatWave(history));
+    }
+
+    // ── DetectColdFront ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void DetectColdFront_ConsistentDescent_ReturnsTrue()
+    {
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 2.0, 5, 100),
+            new("b", "2024-01-02", 1.7, 5, 100),
+            new("c", "2024-01-03", 1.4, 5, 100),
+            new("d", "2024-01-04", 1.1, 5, 100),
+        };
+        Assert.True(ComparisonReporter.DetectColdFront(history));
+    }
+
+    [Fact]
+    public void DetectColdFront_RisingHistory_ReturnsFalse()
+    {
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 0.5, 5, 100),
+            new("b", "2024-01-02", 0.8, 5, 100),
+            new("c", "2024-01-03", 1.1, 5, 100),
+            new("d", "2024-01-04", 1.4, 5, 100),
+        };
+        Assert.False(ComparisonReporter.DetectColdFront(history));
+    }
+
+    [Fact]
+    public void DetectColdFront_TooShortHistory_ReturnsFalse()
+    {
+        var history = new List<DataJsonHistoryEntry>
+        {
+            new("a", "2024-01-01", 2.0, 5, 100),
+            new("b", "2024-01-02", 1.5, 5, 100),
+            new("c", "2024-01-03", 1.0, 5, 100),
+        };
+        // minWindow=3, need Count >= 4
+        Assert.False(ComparisonReporter.DetectColdFront(history));
     }
 
     [Fact]
@@ -325,7 +545,32 @@ public class ComparisonReporterTests
         Assert.Contains("Metrics Overview",        html);
         Assert.Contains("Entropy Trend Comparison",html);
         Assert.Contains("File-Level Changes",      html);
+        Assert.Contains("Drift Forecast",          html);  // legend section
         Assert.Contains("chart.js",                html);
+    }
+
+    [Fact]
+    public void GenerateHtml_ContainsWeatherLegendAllConditions()
+    {
+        var reporter = new ComparisonReporter();
+        var html = reporter.GenerateHtml(MakeReport(1.0), MakeReport(1.5));
+
+        // Every weather condition name should appear in the legend
+        foreach (var (_, name, _) in ComparisonReporter.WeatherLegend)
+            Assert.Contains(name, html);
+    }
+
+    [Fact]
+    public void WeatherLegend_ContainsAllSixConditions()
+    {
+        Assert.Equal(6, ComparisonReporter.WeatherLegend.Count);
+        var names = ComparisonReporter.WeatherLegend.Select(x => x.Name).ToList();
+        Assert.Contains("Stable",      names);
+        Assert.Contains("Warming",     names);
+        Assert.Contains("Cooling",     names);
+        Assert.Contains("Heat Spike",  names);
+        Assert.Contains("Heat Wave",   names);
+        Assert.Contains("Cold Front",  names);
     }
 
     [Fact]

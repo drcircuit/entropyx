@@ -91,7 +91,7 @@ public class DataJsonReport
 
 // ── Assessment ────────────────────────────────────────────────────────────────
 
-public enum Verdict { Improving, Stable, Regressing, Critical }
+public enum Verdict { Stable, Warming, Cooling, HeatSpike, HeatWave, ColdFront }
 
 public record ComparisonAssessment(
     Verdict Verdict,
@@ -106,9 +106,25 @@ public class ComparisonReporter
 {
     private const int TopFilesCount = 10;
     private const string ReportDateFormat = "yyyy-MM-dd HH:mm 'UTC'";
+    /// <summary>Minimum absolute entropy change used across spike/wave/front detectors.</summary>
+    private const double EntropyElevationThreshold = 0.05;
 
     private static string ShortDate(string generated) =>
         generated[..Math.Min(10, generated.Length)];
+
+    /// <summary>
+    /// The six weather-forecast conditions used to describe EntropyX drift trends,
+    /// in display order. Each entry is (emoji, name, description).
+    /// </summary>
+    public static readonly IReadOnlyList<(string Emoji, string Name, string Description)> WeatherLegend =
+    [
+        ("⚖️",  "Stable",      "EntropyX is flat within normal variability — no significant structural drift."),
+        ("🌡️", "Warming",     "EntropyX is trending up steadily — structural drift accumulating commit by commit."),
+        ("🧊",  "Cooling",     "EntropyX is trending downward — stabilization or refactor benefit in progress."),
+        ("🔥",  "Heat Spike",  "EntropyX jumps sharply in a single step — a regression event was detected."),
+        ("♨️",  "Heat Wave",   "EntropyX stays elevated across a sustained window — drift accumulating unchecked."),
+        ("❄️",  "Cold Front",  "EntropyX drops consistently over multiple commits — focused cleanup paying off."),
+    ];
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -119,6 +135,7 @@ public class ComparisonReporter
         AppendHtmlHeader(sb, baseline, current);
         AppendEntropyHero(sb, baseline, current);
         AppendAssessmentSection(sb, assessment);
+        AppendWeatherLegend(sb);
         AppendMetricsComparison(sb, baseline, current);
         AppendTrendChart(sb, baseline, current);
         AppendFilesComparison(sb, baseline, current);
@@ -139,14 +156,16 @@ public class ComparisonReporter
 
         var verdictColor = assessment.Verdict switch
         {
-            Verdict.Improving  => "green",
-            Verdict.Stable     => "yellow",
-            Verdict.Regressing => "red",
-            Verdict.Critical   => "bold red",
+            Verdict.Stable     => "grey",
+            Verdict.Warming    => "yellow",
+            Verdict.Cooling    => "cyan",
+            Verdict.HeatSpike  => "bold red",
+            Verdict.HeatWave   => "red",
+            Verdict.ColdFront  => "bold cyan",
             _ => "white"
         };
 
-        AnsiConsole.MarkupLine($"[bold]Verdict:[/] [{verdictColor}]{Markup.Escape(assessment.VerdictLabel)}[/]");
+        AnsiConsole.MarkupLine($"[bold]Forecast:[/] [{verdictColor}]{Markup.Escape(assessment.VerdictLabel)}[/]");
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(assessment.Summary)}[/]\n");
 
         // Metrics table
@@ -181,6 +200,15 @@ public class ComparisonReporter
                 AnsiConsole.MarkupLine($"  • {Markup.Escape(obs)}");
         }
 
+        // Weather legend
+        AnsiConsole.WriteLine();
+        var legendTable = new Table().Border(TableBorder.Rounded).Title("[grey]Drift Forecast — Legend[/]");
+        legendTable.AddColumn("[grey]Condition[/]");
+        legendTable.AddColumn("[grey]Meaning[/]");
+        foreach (var (emoji, name, desc) in WeatherLegend)
+            legendTable.AddRow($"{Markup.Escape(emoji)} [bold]{Markup.Escape(name)}[/]", $"[grey]{Markup.Escape(desc)}[/]");
+        AnsiConsole.Write(legendTable);
+
         AnsiConsole.WriteLine();
     }
 
@@ -197,87 +225,166 @@ public class ComparisonReporter
         int cFiles = current.Summary?.Files  ?? 0;
         int bSloc  = baseline.Summary?.Sloc  ?? 0;
         int cSloc  = current.Summary?.Sloc   ?? 0;
+        int slocDelta  = cSloc  - bSloc;
+        int filesDelta = cFiles - bFiles;
 
         var observations = new List<string>();
 
         // Entropy trend within current snapshot
         double currentTrend = ComputeEntropyTrend(current.History);
-        double baselineTrend = ComputeEntropyTrend(baseline.History);
 
-        // Primary entropy observation
+        // Primary entropy observation (drift-framed language)
         if (Math.Abs(entropyDelta) < 0.001)
-            observations.Add("EntropyX score is virtually unchanged between snapshots.");
+            observations.Add("EntropyX is virtually unchanged between snapshots — no significant drift detected.");
         else if (entropyDelta < 0)
-            observations.Add($"EntropyX score decreased by {Math.Abs(entropyDelta):F4} ({Math.Abs(relativeDelta):P1}), indicating improved code quality distribution.");
+            observations.Add($"EntropyX dropped by {Math.Abs(entropyDelta):F4} ({Math.Abs(relativeDelta):P1}) since baseline — the codebase has cooled.");
         else
-            observations.Add($"EntropyX score increased by {entropyDelta:F4} ({relativeDelta:P1}), indicating growing code complexity.");
+            observations.Add($"EntropyX rose by {entropyDelta:F4} ({relativeDelta:P1}) since baseline — structural drift is accumulating.");
 
-        // Internal trend of the current snapshot
+        // Internal trend observation
         if (current.History.Count >= 3)
         {
             if (currentTrend > 0.001)
-                observations.Add($"Current snapshot shows an upward entropy trend (slope ≈ {currentTrend:F4}/commit), suggesting ongoing complexity growth.");
+                observations.Add($"The codebase is warming within this snapshot — entropy rising at ~{currentTrend:F4} per commit.");
             else if (currentTrend < -0.001)
-                observations.Add($"Current snapshot shows a downward entropy trend (slope ≈ {currentTrend:F4}/commit), suggesting active refactoring.");
+                observations.Add($"The codebase is cooling within this snapshot — entropy falling at ~{Math.Abs(currentTrend):F4} per commit.");
             else
-                observations.Add("Entropy trend within the current snapshot is flat — complexity is stable.");
+                observations.Add("Entropy is flat within this snapshot — the codebase temperature is stable.");
         }
 
-        // SLOC growth relative to entropy
-        int slocDelta = cSloc - bSloc;
+        // SLOC growth relative to entropy direction
         if (slocDelta > 0 && entropyDelta <= 0)
-            observations.Add($"Codebase grew by {slocDelta:N0} SLOC while entropy improved — a positive signal of controlled growth.");
+            observations.Add($"Codebase grew by {slocDelta:N0} SLOC while entropy cooled — a positive sign of controlled growth.");
         else if (slocDelta > 0 && entropyDelta > 0)
-            observations.Add($"Codebase grew by {slocDelta:N0} SLOC with a corresponding entropy increase — complexity is spreading.");
+            observations.Add($"Codebase grew by {slocDelta:N0} SLOC with rising entropy — complexity is spreading.");
         else if (slocDelta < 0 && entropyDelta < 0)
             observations.Add($"Codebase shrank by {Math.Abs(slocDelta):N0} SLOC and entropy improved — likely effective dead code removal.");
 
         // File count change
-        int filesDelta = cFiles - bFiles;
         if (filesDelta > 0)
             observations.Add($"{filesDelta} new file(s) added since baseline.");
         else if (filesDelta < 0)
             observations.Add($"{Math.Abs(filesDelta)} file(s) removed since baseline.");
 
-        // Top worsened/improved files
+        // Per-file temperature observations
         var worsenedFiles = GetWorsenedFiles(baseline, current);
         var improvedFiles = GetImprovedFiles(baseline, current);
         if (worsenedFiles.Count > 0)
-            observations.Add($"{worsenedFiles.Count} file(s) show higher badness in the current snapshot (e.g. {worsenedFiles[0].Path}).");
+            observations.Add($"{worsenedFiles.Count} file(s) are running hotter (higher badness) than at baseline (e.g. {worsenedFiles[0].Path}).");
         if (improvedFiles.Count > 0)
-            observations.Add($"{improvedFiles.Count} file(s) show lower badness in the current snapshot (e.g. {improvedFiles[0].Path}).");
+            observations.Add($"{improvedFiles.Count} file(s) have cooled down (lower badness) since baseline (e.g. {improvedFiles[0].Path}).");
 
-        // Determine verdict
+        // Determine weather forecast — HeatWave takes priority over HeatSpike because
+        // sustained elevation is more severe than a single spike that may have subsided.
+        bool heatWave  = cEntropy > bEntropy && DetectHeatWave(current.History);
+        bool heatSpike = !heatWave && entropyDelta > 0 && DetectHeatSpike(current.History);
+        bool coldFront = entropyDelta < -EntropyElevationThreshold && DetectColdFront(current.History);
+
         Verdict verdict;
         string verdictLabel;
         string summary;
 
-        if (cEntropy >= 2.0 && entropyDelta > 0)
+        if (heatWave)
         {
-            verdict = Verdict.Critical;
-            verdictLabel = "🔴 Critical";
-            summary = "EntropyX is high and still rising. Code disorder is at a critical level — immediate refactoring is strongly recommended.";
+            verdict = Verdict.HeatWave;
+            verdictLabel = "♨️ Heat Wave";
+            summary = "EntropyX has remained elevated across multiple commits — sustained structural drift is accumulating without correction. Consider a focused refactoring session.";
         }
-        else if (entropyDelta > 0.1 || relativeDelta > 0.1)
+        else if (heatSpike)
         {
-            verdict = Verdict.Regressing;
-            verdictLabel = "🟠 Regressing";
-            summary = "EntropyX score has grown noticeably. The codebase is accumulating disorder faster than it is being addressed.";
+            verdict = Verdict.HeatSpike;
+            verdictLabel = "🔥 Heat Spike";
+            summary = "EntropyX spiked sharply — a single regression event has significantly disrupted the codebase's structural balance. Investigate recent commits.";
         }
-        else if (entropyDelta < -0.05 || (entropyDelta < 0 && slocDelta >= 0))
+        else if (coldFront)
         {
-            verdict = Verdict.Improving;
-            verdictLabel = "🟢 Improving";
-            summary = "EntropyX score has decreased, indicating that code quality distribution is improving. Keep up the good work.";
+            verdict = Verdict.ColdFront;
+            verdictLabel = "❄️ Cold Front";
+            summary = "A sustained entropy reduction is underway — focused refactoring or cleanup efforts are paying off with a meaningful structural improvement.";
+        }
+        else if (currentTrend > 0.001 && entropyDelta > 0.01)
+        {
+            verdict = Verdict.Warming;
+            verdictLabel = "🌡️ Warming";
+            summary = "EntropyX is drifting upward steadily. No immediate crisis, but structural complexity is accumulating — keep an eye on hot spots.";
+        }
+        else if (currentTrend < -0.001 && entropyDelta <= 0)
+        {
+            verdict = Verdict.Cooling;
+            verdictLabel = "🧊 Cooling";
+            summary = "EntropyX is trending downward — the codebase is stabilizing. Refactoring and cleanup efforts are having a measurable effect.";
         }
         else
         {
             verdict = Verdict.Stable;
-            verdictLabel = "🟡 Stable";
-            summary = "EntropyX score is largely stable between snapshots. The codebase is holding its current quality level.";
+            verdictLabel = "⚖️ Stable";
+            summary = "EntropyX is flat within normal variability — no significant structural drift detected. The codebase temperature is holding steady.";
         }
 
         return new ComparisonAssessment(verdict, verdictLabel, summary, observations);
+    }
+
+    // ── Weather condition detectors ────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns true if a single commit in the history caused a sharp entropy spike —
+    /// i.e. the largest positive step is a statistical outlier (> mean + 1.5σ) AND at least
+    /// <see cref="EntropyElevationThreshold"/> in absolute terms. The absolute guard prevents
+    /// false positives in histories where all steps are tiny floating-point noise.
+    /// </summary>
+    public static bool DetectHeatSpike(IReadOnlyList<DataJsonHistoryEntry> history)
+    {
+        if (history.Count < 3) return false;
+        var steps = new List<double>(history.Count - 1);
+        for (int i = 1; i < history.Count; i++)
+            steps.Add(history[i].Entropy - history[i - 1].Entropy);
+        double mean = steps.Average();
+        double variance = steps.Average(d => (d - mean) * (d - mean));
+        double stdDev = Math.Sqrt(variance);
+        double maxStep = steps.Max();
+        return maxStep > mean + 1.5 * stdDev && maxStep > EntropyElevationThreshold;
+    }
+
+    /// <summary>
+    /// Returns true if entropy has been elevated AND stable (not still climbing) for the last
+    /// <paramref name="minWindow"/> commits. This distinguishes a "heat wave" (sustained plateau
+    /// at a high level) from "warming" (entropy still rising step by step).
+    /// Requires at least <paramref name="minWindow"/> + 2 history entries.
+    /// </summary>
+    public static bool DetectHeatWave(IReadOnlyList<DataJsonHistoryEntry> history, int minWindow = 3)
+    {
+        if (history.Count < minWindow + 2) return false;
+        // Reference = point just before the elevated window
+        int refIdx = history.Count - minWindow - 1;
+        double refEntropy = history[refIdx].Entropy;
+
+        // All window points must be strictly elevated above the reference (not just at the threshold)
+        for (int i = refIdx + 1; i < history.Count; i++)
+            if (history[i].Entropy <= refEntropy + EntropyElevationThreshold)
+                return false;
+
+        // The elevation must be relatively stable (not a steep ongoing climb).
+        // A heat wave = jumped up AND the rise *within* the window is smaller than the jump itself.
+        double firstOfWindow = history[refIdx + 1].Entropy;
+        double lastOfWindow  = history[history.Count - 1].Entropy;
+        double elevation     = firstOfWindow - refEntropy;
+        double windowRise    = lastOfWindow  - firstOfWindow;
+
+        return elevation > EntropyElevationThreshold && Math.Abs(windowRise) < elevation;
+    }
+
+    /// <summary>
+    /// Returns true if entropy has been declining in a sustained, consecutive manner
+    /// for at least 70% of the last <paramref name="minWindow"/> steps.
+    /// </summary>
+    public static bool DetectColdFront(IReadOnlyList<DataJsonHistoryEntry> history, int minWindow = 3)
+    {
+        if (history.Count < minWindow + 1) return false;
+        int declineCount = 0;
+        for (int i = history.Count - minWindow; i < history.Count; i++)
+            if (history[i].Entropy < history[i - 1].Entropy)
+                declineCount++;
+        return declineCount >= (int)Math.Ceiling(minWindow * 0.7);
     }
 
     // ── File diff helpers ──────────────────────────────────────────────────────
@@ -383,11 +490,13 @@ public class ComparisonReporter
                 .delta-zero { color: var(--muted); }
                 section { margin-bottom: 2.5rem; }
                 .section-title { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
-                .verdict-box { border-radius: 12px; padding: 1.5rem 2rem; border: 2px solid; margin-bottom: 1.5rem; }
-                .verdict-improving  { border-color: var(--green);  background: rgba(34,197,94,.08); }
-                .verdict-stable     { border-color: var(--yellow); background: rgba(245,158,11,.08); }
-                .verdict-regressing { border-color: var(--red);    background: rgba(239,68,68,.08); }
-                .verdict-critical   { border-color: #ff0033;       background: rgba(255,0,51,.12); }
+                .verdict-box        { border-radius: 12px; padding: 1.5rem 2rem; border: 2px solid; margin-bottom: 1.5rem; }
+                .verdict-stable     { border-color: #94a3b8;      background: rgba(148,163,184,.08); }
+                .verdict-warming    { border-color: var(--yellow); background: rgba(245,158,11,.08); }
+                .verdict-cooling    { border-color: #38bdf8;       background: rgba(56,189,248,.08); }
+                .verdict-heat-spike { border-color: var(--red);    background: rgba(239,68,68,.12); }
+                .verdict-heat-wave  { border-color: #f97316;       background: rgba(249,115,22,.12); }
+                .verdict-cold-front { border-color: #818cf8;       background: rgba(129,140,248,.08); }
                 .verdict-label { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; }
                 .verdict-summary { color: var(--text); font-size: 0.95rem; }
                 .obs-list { list-style: none; padding: 0; margin-top: 1rem; }
@@ -469,10 +578,12 @@ public class ComparisonReporter
     {
         string verdictCssClass = assessment.Verdict switch
         {
-            Verdict.Improving  => "verdict-improving",
             Verdict.Stable     => "verdict-stable",
-            Verdict.Regressing => "verdict-regressing",
-            Verdict.Critical   => "verdict-critical",
+            Verdict.Warming    => "verdict-warming",
+            Verdict.Cooling    => "verdict-cooling",
+            Verdict.HeatSpike  => "verdict-heat-spike",
+            Verdict.HeatWave   => "verdict-heat-wave",
+            Verdict.ColdFront  => "verdict-cold-front",
             _ => "verdict-stable"
         };
 
@@ -490,6 +601,41 @@ public class ComparisonReporter
 
         sb.AppendLine("""
                 </ul>
+              </div>
+            </section>
+            """);
+    }
+
+    private static void AppendWeatherLegend(StringBuilder sb)
+    {
+        sb.AppendLine("""
+            <section>
+              <div class="section-title">Drift Forecast — Legend</div>
+              <div class="card">
+                <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem">
+                  EntropyX is a <em>drift metric</em>, not a grade. These conditions describe the <strong>shape of entropy over time</strong> — not a pass/fail score.
+                </p>
+                <table>
+                  <thead><tr>
+                    <th style="width:8rem">Condition</th>
+                    <th>Meaning</th>
+                  </tr></thead>
+                  <tbody>
+            """);
+
+        foreach (var (emoji, name, desc) in WeatherLegend)
+        {
+            sb.AppendLine($"""
+                    <tr>
+                      <td><span style="font-size:1.1rem">{EscapeHtml(emoji)}</span>&nbsp;<strong>{EscapeHtml(name)}</strong></td>
+                      <td style="color:var(--muted)">{EscapeHtml(desc)}</td>
+                    </tr>
+                """);
+        }
+
+        sb.AppendLine("""
+                  </tbody>
+                </table>
               </div>
             </section>
             """);
