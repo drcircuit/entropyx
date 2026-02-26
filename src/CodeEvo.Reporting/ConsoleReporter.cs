@@ -49,4 +49,19 @@ public class ConsoleReporter
         AnsiConsole.MarkupLine($"[bold yellow]WARNING:[/] Tool [red]{Markup.Escape(toolName)}[/] is not available.");
         AnsiConsole.MarkupLine($"  Install with: [cyan]{Markup.Escape(installInstructions)}[/]");
     }
+
+    public void ReportLanguageScan(IEnumerable<(string Path, string Language)> results)
+    {
+        var table = new Table();
+        table.AddColumn("File");
+        table.AddColumn("Language");
+        foreach (var (path, language) in results)
+            table.AddRow(Markup.Escape(path), language);
+        AnsiConsole.Write(table);
+    }
+
+    public void ReportScanSummary(int fileCount, int totalSloc)
+    {
+        AnsiConsole.MarkupLine($"\n[bold]Total files:[/] [green]{fileCount}[/]  [bold]Total SLOC:[/] [green]{totalSloc}[/]");
+    }
 }

@@ -50,4 +50,33 @@ public class ScanPipeline
 
         return (fileMetrics, repoMetrics);
     }
+
+    public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath)
+    {
+        var result = new List<FileMetrics>();
+        foreach (var filePath in Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories))
+        {
+            var language = LanguageDetector.Detect(filePath);
+            string[] lines;
+            try { lines = File.ReadAllLines(filePath); }
+            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException) { continue; }
+
+            var sloc = SlocCounter.CountSloc(lines, language);
+            var relativePath = Path.GetRelativePath(dirPath, filePath);
+            result.Add(new FileMetrics(
+                CommitHash: string.Empty,
+                Path: relativePath,
+                Language: language,
+                Sloc: sloc,
+                CyclomaticComplexity: 0,
+                MaintainabilityIndex: 0,
+                SmellsHigh: 0,
+                SmellsMedium: 0,
+                SmellsLow: 0,
+                CouplingProxy: 0,
+                MaintainabilityProxy: 0));
+        }
+        return result;
+    }
 }
