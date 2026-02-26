@@ -1537,7 +1537,7 @@ public class HtmlReporter
         // Map a data point to SVG coordinates
         double Px(int i) => padL + i * xScale;
         double Py(double v) => padT + chartH - (v - yAxisMin) * yScale;
-        static string F1(double v) => v.ToString("F1", CultureInfo.InvariantCulture);
+        static string FormatInvariantF1(double v) => v.ToString("F1", CultureInfo.InvariantCulture);
 
         var sb = new StringBuilder();
         sb.Append($"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">""");
@@ -1563,11 +1563,11 @@ public class HtmlReporter
         {
             double v = yAxisMin + t * (yAxisMax - yAxisMin) / gridSteps;
             double sy = Py(v);
-            sb.Append($"""<line x1="{padL}" y1="{F1(sy)}" x2="{padL + chartW}" y2="{F1(sy)}" stroke="#2d3044" stroke-width="1"/>""");
+            sb.Append($"""<line x1="{padL}" y1="{FormatInvariantF1(sy)}" x2="{padL + chartW}" y2="{FormatInvariantF1(sy)}" stroke="#2d3044" stroke-width="1"/>""");
             string tickLbl = v >= ThousandsThreshold ? (v / ThousandsThreshold).ToString("F1", CultureInfo.InvariantCulture) + "k"
                            : v >= DecimalThreshold   ? v.ToString("F1", CultureInfo.InvariantCulture)
                            :                           v.ToString("F4", CultureInfo.InvariantCulture);
-            sb.Append($"""<text x="{padL - 6}" y="{F1(sy + 4)}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
+            sb.Append($"""<text x="{padL - 6}" y="{FormatInvariantF1(sy + 4)}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
         }
 
         // X-axis tick labels (show at most 10 evenly spaced)
@@ -1578,7 +1578,7 @@ public class HtmlReporter
             int idx = (int)Math.Round(t * xTickStep);
             if (idx >= points.Count) idx = points.Count - 1;
             double sx = Px(idx);
-            sb.Append($"""<text x="{F1(sx)}" y="{padT + chartH + 18}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(points[idx].Label)}</text>""");
+            sb.Append($"""<text x="{FormatInvariantF1(sx)}" y="{padT + chartH + 18}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(points[idx].Label)}</text>""");
         }
 
         // Axes
@@ -1587,10 +1587,10 @@ public class HtmlReporter
 
         // Filled area under the line
         var fillPts = new StringBuilder();
-        fillPts.Append($"{F1(Px(0))},{padT + chartH} ");
+        fillPts.Append($"{FormatInvariantF1(Px(0))},{padT + chartH} ");
         foreach (var (i, (_, v)) in points.Select((p, i) => (i, p)))
-            fillPts.Append($"{F1(Px(i))},{F1(Py(v))} ");
-        fillPts.Append($"{F1(Px(points.Count - 1))},{padT + chartH}");
+            fillPts.Append($"{FormatInvariantF1(Px(i))},{FormatInvariantF1(Py(v))} ");
+        fillPts.Append($"{FormatInvariantF1(Px(points.Count - 1))},{padT + chartH}");
 
         // Parse lineColor to derive fill opacity variant (e.g. #7c6af7 → rgba)
         string fillColor = lineColor.StartsWith('#')
@@ -1599,7 +1599,7 @@ public class HtmlReporter
         sb.Append($"""<polygon points="{fillPts}" fill="{fillColor}"/>""");
 
         // The line itself
-        var linePts = string.Join(" ", points.Select((p, i) => $"{F1(Px(i))},{F1(Py(p.Value))}"));
+        var linePts = string.Join(" ", points.Select((p, i) => $"{FormatInvariantF1(Px(i))},{FormatInvariantF1(Py(p.Value))}"));
         sb.Append($"""<polyline points="{linePts}" fill="none" stroke="{EscapeHtml(lineColor)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>""");
 
         sb.Append("</svg>");
