@@ -131,7 +131,7 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
     var allMetrics = repoMetricsRepo.GetAll();
     if (allMetrics.Count == 0)
     {
-        Console.WriteLine("No metrics found. Run 'scan full' or 'scan head' first.");
+        Console.WriteLine("No metrics found. Run 'scan full', 'scan head', 'scan from', or 'scan chk' first.");
         return;
     }
 
