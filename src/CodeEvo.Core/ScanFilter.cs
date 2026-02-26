@@ -36,6 +36,35 @@ public static class ScanFilter
         return parts.Length > 1 && parts[..^1].Any(p => DefaultIgnoredDirectories.Contains(p));
     }
 
+    /// <summary>Reads exclusion patterns from a <c>.exignore</c> file in <paramref name="rootPath"/>.
+    /// Lines beginning with <c>#</c> and blank lines are ignored.
+    /// Returns an empty array when the file does not exist.</summary>
+    public static string[] LoadExIgnorePatterns(string rootPath)
+    {
+        var exIgnorePath = Path.Combine(rootPath, ".exignore");
+        if (!File.Exists(exIgnorePath))
+            return [];
+        return File.ReadAllLines(exIgnorePath)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
+    }
+
+    /// <summary>Returns true when any segment of <paramref name="filePath"/> (directory component or
+    /// file name) matches at least one pattern from <paramref name="exIgnorePatterns"/>.</summary>
+    public static bool IsExIgnored(string filePath, string rootPath, string[] exIgnorePatterns)
+    {
+        if (exIgnorePatterns.Length == 0)
+            return false;
+        var relative = Path.IsPathRooted(filePath)
+            ? Path.GetRelativePath(rootPath, filePath)
+            : filePath;
+        var parts = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        return parts.Any(part => exIgnorePatterns.Any(pattern => MatchGlob(part, pattern)));
+    }
+
     /// <summary>Returns true when <paramref name="includePatterns"/> is null/empty,
     /// or the file name matches at least one glob pattern.</summary>
     public static bool MatchesFilter(string filePath, string[]? includePatterns)

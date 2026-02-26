@@ -22,10 +22,11 @@ scanLangCommand.AddOption(scanLangIncludeOption);
 scanLangCommand.SetHandler((string path, string? include) =>
 {
     var includePatterns = ParsePatterns(include);
+    var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(path);
     var reporter = new ConsoleReporter();
     var files = Directory.EnumerateFiles(path, "*", new EnumerationOptions
             { RecurseSubdirectories = true, IgnoreInaccessible = true })
-        .Where(f => !ScanFilter.IsPathIgnored(f, path) && ScanFilter.MatchesFilter(f, includePatterns))
+        .Where(f => !ScanFilter.IsPathIgnored(f, path) && !ScanFilter.IsExIgnored(f, path, exIgnorePatterns) && ScanFilter.MatchesFilter(f, includePatterns))
         .Select(f => (Path: Path.GetRelativePath(path, f), Language: LanguageDetector.Detect(f)))
         .Where(x => x.Language.Length > 0)
         .OrderBy(x => x.Language).ThenBy(x => x.Path);
@@ -353,12 +354,13 @@ static void CheckTools(string path)
     }
     else
     {
+        var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(path);
         detectedLanguages = Directory.EnumerateFiles(path, "*", new EnumerationOptions
             {
                 RecurseSubdirectories = true,
                 IgnoreInaccessible = true
             })
-            .Where(f => !ScanFilter.IsPathIgnored(f, path))
+            .Where(f => !ScanFilter.IsPathIgnored(f, path) && !ScanFilter.IsExIgnored(f, path, exIgnorePatterns))
             .Select(f => LanguageDetector.Detect(f))
             .Where(lang => lang.Length > 0)
             .Distinct()
