@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.CommandLine;
 using System.Runtime.InteropServices;
 using CodeEvo.Adapters;
@@ -5,38 +6,54 @@ using CodeEvo.Core;
 using CodeEvo.Core.Models;
 using CodeEvo.Reporting;
 using CodeEvo.Storage;
+using Spectre.Console;
 
 var rootCommand = new RootCommand("EntropyX - git history analyzer");
 
 // ── scan command group ────────────────────────────────────────────────────────
 var scanCommand = new Command("scan", "Scan code for metrics");
 
-// scan lang [path]
+// scan lang [path] [--include <patterns>]
 var scanLangPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
+var scanLangIncludeOption = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
 var scanLangCommand = new Command("lang", "Detect language for each source file in a directory");
 scanLangCommand.AddArgument(scanLangPathArg);
-scanLangCommand.SetHandler((string path) =>
+scanLangCommand.AddOption(scanLangIncludeOption);
+scanLangCommand.SetHandler((string path, string? include) =>
 {
+    var includePatterns = ParsePatterns(include);
     var reporter = new ConsoleReporter();
-    var files = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+    var files = Directory.EnumerateFiles(path, "*", new EnumerationOptions
+            { RecurseSubdirectories = true, IgnoreInaccessible = true })
+        .Where(f => !ScanFilter.IsPathIgnored(f, path) && ScanFilter.MatchesFilter(f, includePatterns))
         .Select(f => (Path: Path.GetRelativePath(path, f), Language: LanguageDetector.Detect(f)))
         .Where(x => x.Language.Length > 0)
         .OrderBy(x => x.Language).ThenBy(x => x.Path);
     reporter.ReportLanguageScan(files);
-}, scanLangPathArg);
+}, scanLangPathArg, scanLangIncludeOption);
 
-// scan here [path]
+// scan here [path] [--include <patterns>]
 var scanHerePathArg = new Argument<string>("path", () => ".", "Directory to scan (no git required)");
+var scanHereIncludeOption = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
 var scanHereCommand = new Command("here", "Scan current directory without git");
 scanHereCommand.AddArgument(scanHerePathArg);
-scanHereCommand.SetHandler((string path) =>
+scanHereCommand.AddOption(scanHereIncludeOption);
+scanHereCommand.SetHandler((string path, string? include) =>
 {
+    var includePatterns = ParsePatterns(include);
     var pipeline = new ScanPipeline();
     var reporter = new ConsoleReporter();
-    var files = pipeline.ScanDirectory(path);
-    reporter.ReportFileMetrics(files);
-    reporter.ReportScanSummary(files.Count, files.Sum(f => f.Sloc));
-}, scanHerePathArg);
+    IReadOnlyList<FileMetrics> files = [];
+    AnsiConsole.Status()
+        .Spinner(Spinner.Known.Dots)
+        .Start($"Scanning {path}...", _ => files = pipeline.ScanDirectory(path, includePatterns));
+    // When no explicit filter is given, show only recognized source files
+    var display = includePatterns is null
+        ? files.Where(f => f.Language.Length > 0).ToList()
+        : (IReadOnlyList<FileMetrics>)files;
+    reporter.ReportFileMetrics(display);
+    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc));
+}, scanHerePathArg, scanHereIncludeOption);
 
 // scan head [repoPath] [--db]
 var scanHeadRepoArg = new Argument<string>("repoPath", () => ".", "Path to the git repository");
@@ -48,8 +65,8 @@ scanHeadCommand.SetHandler((string repoPath, string dbPath) =>
 {
     var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
     var headCommit = traversal.GetAllCommits(repoPath).FirstOrDefault();
-    if (headCommit is null) { Console.WriteLine("No commits found."); return; }
-    ScanAndStore(headCommit, repoPath, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter);
+    if (headCommit is null) { AnsiConsole.MarkupLine("[red]No commits found.[/]"); return; }
+    RunGitScan([headCommit], pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
 }, scanHeadRepoArg, scanHeadDbOption);
 
 // scan from <commit> [repoPath] [--db]
@@ -63,7 +80,8 @@ scanFromCommand.AddOption(scanFromDbOption);
 scanFromCommand.SetHandler((string since, string repoPath, string dbPath) =>
 {
     var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
-    RunGitScan(traversal, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, since);
+    var commits = traversal.GetAllCommits(repoPath).Reverse().SkipWhile(c => c.Hash != since);
+    RunGitScan(commits, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
 }, scanFromCommitArg, scanFromRepoArg, scanFromDbOption);
 
 // scan full [repoPath] [--db]
@@ -75,7 +93,7 @@ scanFullCommand.AddOption(scanFullDbOption);
 scanFullCommand.SetHandler((string repoPath, string dbPath) =>
 {
     var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
-    RunGitScan(traversal, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, since: null);
+    RunGitScan(traversal.GetAllCommits(repoPath).Reverse(), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
 }, scanFullRepoArg, scanFullDbOption);
 
 // scan chk [repoPath] [--db]
@@ -87,15 +105,7 @@ scanChkCommand.AddOption(scanChkDbOption);
 scanChkCommand.SetHandler((string repoPath, string dbPath) =>
 {
     var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
-    foreach (var commit in traversal.GetCheckpointCommits(repoPath))
-    {
-        if (commitRepo.Exists(commit.Hash))
-        {
-            Console.WriteLine($"Skipping already-scanned commit {commit.Hash[..8]}");
-            continue;
-        }
-        ScanAndStore(commit, repoPath, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter);
-    }
+    RunGitScan(traversal.GetCheckpointCommits(repoPath), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
 }, scanChkRepoArg, scanChkDbOption);
 
 scanCommand.AddCommand(scanLangCommand);
@@ -107,8 +117,10 @@ scanCommand.AddCommand(scanChkCommand);
 
 // ── check command group ───────────────────────────────────────────────────────
 var checkCommand = new Command("check", "Check system requirements");
+var checkToolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
 var checkToolsCommand = new Command("tools", "Verify external tool availability and show install instructions");
-checkToolsCommand.SetHandler(CheckTools);
+checkToolsCommand.AddArgument(checkToolsPathArg);
+checkToolsCommand.SetHandler((string path) => CheckTools(path), checkToolsPathArg);
 checkCommand.AddCommand(checkToolsCommand);
 
 // ── report subcommand ─────────────────────────────────────────────────────────
@@ -146,8 +158,10 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
 }, reportRepoArg, reportDbOption, reportCommitOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
+var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
 var toolsCommand = new Command("tools", "Check availability of external tools");
-toolsCommand.SetHandler(CheckTools);
+toolsCommand.AddArgument(toolsPathArg);
+toolsCommand.SetHandler((string path) => CheckTools(path), toolsPathArg);
 
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
@@ -157,6 +171,9 @@ rootCommand.AddCommand(toolsCommand);
 return await rootCommand.InvokeAsync(args);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+static string[]? ParsePatterns(string? input) =>
+    input?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRepository, ScanPipeline, GitTraversal)
     BuildScanDeps(string dbPath)
 {
@@ -166,55 +183,109 @@ static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRep
             new RepoMetricsRepository(db), new ScanPipeline(), new GitTraversal());
 }
 
-static void ScanAndStore(CommitInfo commit, string repoPath, ScanPipeline pipeline,
-    CommitRepository commitRepo, FileMetricsRepository fileRepo, RepoMetricsRepository repoMetricsRepo,
-    ConsoleReporter reporter)
+static void RunGitScan(
+    IEnumerable<CommitInfo> commits,
+    ScanPipeline pipeline,
+    CommitRepository commitRepo,
+    FileMetricsRepository fileRepo,
+    RepoMetricsRepository repoMetricsRepo,
+    ConsoleReporter reporter,
+    string repoPath)
 {
-    Console.Write($"Scanning {commit.Hash[..8]}... ");
-    var (files, repoMetrics) = pipeline.ScanCommit(commit, repoPath);
-    commitRepo.Insert(commit);
-    foreach (var fm in files)
-        if (!fileRepo.Exists(fm.CommitHash, fm.Path))
-            fileRepo.Insert(fm);
-    repoMetricsRepo.Insert(repoMetrics);
-    reporter.ReportCommit(commit, repoMetrics);
-}
+    // Phase 1: discover which commits still need scanning
+    List<CommitInfo> toScan = [];
+    int skipped = 0;
+    AnsiConsole.Status()
+        .Spinner(Spinner.Known.Dots)
+        .Start("Discovering commits...", _ =>
+        {
+            foreach (var commit in commits)
+            {
+                if (commitRepo.Exists(commit.Hash)) { skipped++; continue; }
+                toScan.Add(commit);
+            }
+        });
 
-static void RunGitScan(GitTraversal traversal, ScanPipeline pipeline, CommitRepository commitRepo,
-    FileMetricsRepository fileRepo, RepoMetricsRepository repoMetricsRepo, ConsoleReporter reporter,
-    string repoPath, string? since)
-{
-    bool foundSince = since is null;
-    foreach (var commit in traversal.GetAllCommits(repoPath).Reverse())
+    if (skipped > 0)
+        AnsiConsole.MarkupLine($"[grey]Skipped {skipped} already-scanned commit(s).[/]");
+
+    if (toScan.Count == 0)
     {
-        if (!foundSince)
-        {
-            if (commit.Hash == since) foundSince = true;
-            else continue;
-        }
+        AnsiConsole.MarkupLine("[grey]No new commits to scan.[/]");
+        return;
+    }
 
-        if (commitRepo.Exists(commit.Hash))
+    // Phase 2: scan commits in parallel with a live progress bar
+    var results = new ConcurrentBag<(CommitInfo Commit, IReadOnlyList<FileMetrics> Files, RepoMetrics RepoMetrics)>();
+    AnsiConsole.Progress()
+        .AutoClear(false)
+        .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new SpinnerColumn())
+        .Start(ctx =>
         {
-            Console.WriteLine($"Skipping already-scanned commit {commit.Hash[..8]}");
-            continue;
-        }
+            var task = ctx.AddTask($"Scanning {toScan.Count} commit(s)", maxValue: toScan.Count);
+            Parallel.ForEach(toScan, commit =>
+            {
+                var (files, repoMetrics) = pipeline.ScanCommit(commit, repoPath);
+                results.Add((commit, files, repoMetrics));
+                task.Increment(1);
+            });
+        });
 
-        ScanAndStore(commit, repoPath, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter);
+    // Phase 3: store and report results in chronological order
+    foreach (var (commit, files, repoMetrics) in results.OrderBy(r => r.Commit.Timestamp))
+    {
+        commitRepo.Insert(commit);
+        foreach (var fm in files)
+            if (!fileRepo.Exists(fm.CommitHash, fm.Path))
+                fileRepo.Insert(fm);
+        repoMetricsRepo.Insert(repoMetrics);
+        reporter.ReportCommit(commit, repoMetrics);
     }
 }
 
-static void CheckTools()
+static void CheckTools(string path)
 {
     var procurement = new ToolProcurement();
     var reporter = new ConsoleReporter();
     string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows"
         : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : "linux";
 
-    string[] tools = ["git", "cloc"];
-    foreach (var tool in tools)
+    List<string> detectedLanguages;
+    if (!Directory.Exists(path))
+    {
+        Console.Error.WriteLine($"Warning: path '{path}' does not exist.");
+        detectedLanguages = [];
+    }
+    else
+    {
+        detectedLanguages = Directory.EnumerateFiles(path, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true
+            })
+            .Where(f => !ScanFilter.IsPathIgnored(f, path))
+            .Select(f => LanguageDetector.Detect(f))
+            .Where(lang => lang.Length > 0)
+            .Distinct()
+            .OrderBy(lang => lang)
+            .ToList();
+    }
+
+    reporter.ReportDetectedLanguages(detectedLanguages);
+
+    var requiredTools = detectedLanguages
+        .SelectMany(lang => procurement.GetRequiredToolsForLanguage(lang))
+        .Distinct()
+        .OrderBy(t => t)
+        .ToList();
+
+    if (requiredTools.Count == 0)
+        requiredTools = ["cloc", "git"];
+
+    foreach (var tool in requiredTools)
     {
         if (procurement.CheckTool(tool))
-            Console.WriteLine($"✓ {tool} is available");
+            reporter.ReportToolAvailable(tool);
         else
         {
             var instructions = procurement.GetInstallInstructions(tool, platform);

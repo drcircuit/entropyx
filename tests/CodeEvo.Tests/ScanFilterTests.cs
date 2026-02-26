@@ -1,0 +1,102 @@
+using CodeEvo.Core;
+using Xunit;
+
+namespace CodeEvo.Tests;
+
+public class ScanFilterTests
+{
+    // ── IsPathIgnored ────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("node_modules/lodash/index.js")]
+    [InlineData("bin/Release/net10.0/app.dll")]
+    [InlineData("obj/Debug/Foo.cs")]
+    [InlineData("dist/bundle.js")]
+    [InlineData("build/output.js")]
+    [InlineData("target/release/app")]
+    [InlineData(".git/COMMIT_EDITMSG")]
+    [InlineData(".vs/solution.suo")]
+    [InlineData("src/node_modules/foo.js")]        // nested ignored dir
+    [InlineData("deep/sub/bin/app.exe")]           // ignored dir deep in tree
+    public void IsPathIgnored_FileInIgnoredDirectory_ReturnsTrue(string relativeSubPath)
+    {
+        var root = Path.GetTempPath();
+        var fullPath = Path.Combine(root, relativeSubPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(ScanFilter.IsPathIgnored(fullPath, root));
+    }
+
+    [Theory]
+    [InlineData("src/Foo.cs")]
+    [InlineData("README.md")]
+    [InlineData("index.ts")]
+    [InlineData("lib/utils.py")]
+    [InlineData("binaries/data.bin")]   // "binaries" is NOT in the ignore list
+    [InlineData("builder/main.go")]     // "builder" is NOT in the ignore list
+    public void IsPathIgnored_FileNotInIgnoredDirectory_ReturnsFalse(string relativeSubPath)
+    {
+        var root = Path.GetTempPath();
+        var fullPath = Path.Combine(root, relativeSubPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.False(ScanFilter.IsPathIgnored(fullPath, root));
+    }
+
+    [Fact]
+    public void IsPathIgnored_FileDirectlyInRoot_ReturnsFalse()
+    {
+        var root = Path.GetTempPath();
+        var fullPath = Path.Combine(root, "Program.cs");
+        Assert.False(ScanFilter.IsPathIgnored(fullPath, root));
+    }
+
+    // ── MatchesFilter ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void MatchesFilter_NullPatterns_ReturnsTrue()
+        => Assert.True(ScanFilter.MatchesFilter("Foo.cs", null));
+
+    [Fact]
+    public void MatchesFilter_EmptyPatterns_ReturnsTrue()
+        => Assert.True(ScanFilter.MatchesFilter("Foo.cs", []));
+
+    [Theory]
+    [InlineData("Foo.cs", "*.cs")]
+    [InlineData("index.ts", "*.ts")]
+    [InlineData("Component.tsx", "*.tsx")]
+    [InlineData("main.cpp", "*.cpp")]
+    public void MatchesFilter_MatchingExtensionPattern_ReturnsTrue(string fileName, string pattern)
+        => Assert.True(ScanFilter.MatchesFilter(fileName, [pattern]));
+
+    [Theory]
+    [InlineData("Foo.cs", "*.ts")]
+    [InlineData("index.js", "*.ts")]
+    [InlineData("README.md", "*.cs")]
+    public void MatchesFilter_NonMatchingExtensionPattern_ReturnsFalse(string fileName, string pattern)
+        => Assert.False(ScanFilter.MatchesFilter(fileName, [pattern]));
+
+    [Fact]
+    public void MatchesFilter_MultiplePatterns_MatchesAny()
+        => Assert.True(ScanFilter.MatchesFilter("index.ts", ["*.cs", "*.ts"]));
+
+    [Fact]
+    public void MatchesFilter_WildcardStar_MatchesAll()
+        => Assert.True(ScanFilter.MatchesFilter("anything.xyz", ["*"]));
+
+    [Theory]
+    [InlineData("Makefile", "Makefile")]
+    [InlineData("makefile", "Makefile")]    // case-insensitive
+    [InlineData("MAKEFILE", "Makefile")]
+    public void MatchesFilter_ExactNamePattern_MatchesCaseInsensitive(string fileName, string pattern)
+        => Assert.True(ScanFilter.MatchesFilter(fileName, [pattern]));
+
+    [Fact]
+    public void MatchesFilter_ExactNamePattern_DoesNotMatchDifferentFile()
+        => Assert.False(ScanFilter.MatchesFilter("Foo.cs", ["Makefile"]));
+
+    // ── MatchGlob (internal, tested via reflection-style coverage) ──────────────
+
+    [Theory]
+    [InlineData("Test.cs", "Test*", true)]     // trailing wildcard
+    [InlineData("Testing.cs", "Test*", true)]
+    [InlineData("Other.cs", "Test*", false)]
+    public void MatchesFilter_TrailingWildcard_Works(string fileName, string pattern, bool expected)
+        => Assert.Equal(expected, ScanFilter.MatchesFilter(fileName, [pattern]));
+}

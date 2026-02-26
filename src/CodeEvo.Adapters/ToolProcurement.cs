@@ -35,9 +35,20 @@ public class ToolProcurement
             ("git", "windows") => "winget install --id Git.Git",
             ("cloc", "linux") => "sudo apt-get install cloc",
             ("cloc", "macos") => "brew install cloc",
-            ("cloc", "windows") => "winget install cloc",
+            ("cloc", "windows") => "winget install AlDanial.Cloc",
+            ("lizard", _) => "pip install lizard",
             _ => $"Please install '{toolName}' for platform '{platform}' manually."
         };
         return instructions;
+    }
+
+    public IReadOnlyList<string> GetRequiredToolsForLanguage(string language)
+    {
+        return language.ToLowerInvariant() switch
+        {
+            "csharp" or "java" or "c" or "cpp" or "typescript" or "javascript" or "python" or "rust"
+                => ["git", "cloc", "lizard"],
+            _ => ["git", "cloc"]
+        };
     }
 }

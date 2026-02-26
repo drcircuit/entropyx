@@ -84,6 +84,64 @@ public class ScanPipelineTests : IDisposable
     }
 
     [Fact]
+    public void ScanDirectory_FileInIgnoredDirectory_IsExcluded()
+    {
+        WriteFile("node_modules/lodash/index.js", "var x = 1;\n");
+        WriteFile("src/main.cs", "int x = 1;\n");
+        var pipeline = new ScanPipeline();
+        var result = pipeline.ScanDirectory(_tempDir);
+
+        Assert.Single(result);
+        Assert.Contains(result, f => f.Path.Contains("main.cs"));
+        Assert.DoesNotContain(result, f => f.Path.Contains("index.js"));
+    }
+
+    [Theory]
+    [InlineData("bin")]
+    [InlineData("obj")]
+    [InlineData("dist")]
+    [InlineData(".git")]
+    public void ScanDirectory_CommonBuildOutputDirectories_AreExcluded(string ignoredDir)
+    {
+        WriteFile($"{ignoredDir}/output.cs", "int x = 1;\n");
+        WriteFile("src/real.cs", "int y = 2;\n");
+        var pipeline = new ScanPipeline();
+        var result = pipeline.ScanDirectory(_tempDir);
+
+        Assert.DoesNotContain(result, f => f.Path.StartsWith(ignoredDir));
+        Assert.Contains(result, f => f.Path.Contains("real.cs"));
+    }
+
+    [Fact]
+    public void ScanDirectory_WithIncludeFilter_ReturnsOnlyMatchingFiles()
+    {
+        WriteFile("Foo.cs", "int x = 1;\n");
+        WriteFile("index.ts", "const x = 1;\n");
+        WriteFile("README.md", "# Hello\n");
+        var pipeline = new ScanPipeline();
+        var result = pipeline.ScanDirectory(_tempDir, ["*.cs"]);
+
+        Assert.Single(result);
+        Assert.Equal("CSharp", result[0].Language);
+        Assert.Contains("Foo.cs", result[0].Path);
+    }
+
+    [Fact]
+    public void ScanDirectory_WithMultipleIncludePatterns_ReturnsAllMatchingFiles()
+    {
+        WriteFile("Foo.cs", "int x = 1;\n");
+        WriteFile("index.ts", "const x = 1;\n");
+        WriteFile("script.py", "x = 1\n");
+        var pipeline = new ScanPipeline();
+        var result = pipeline.ScanDirectory(_tempDir, ["*.cs", "*.ts"]);
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, f => f.Language == "CSharp");
+        Assert.Contains(result, f => f.Language == "TypeScript");
+        Assert.DoesNotContain(result, f => f.Language == "Python");
+    }
+
+    [Fact]
     public void ScanDirectory_RelativePaths_AreRelativeToRoot()
     {
         WriteFile("sub/foo.cs", "int x = 1;\n");
