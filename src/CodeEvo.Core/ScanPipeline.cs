@@ -15,39 +15,63 @@ public class ScanPipeline
 
     public (IReadOnlyList<FileMetrics> Files, RepoMetrics Repo) ScanCommit(CommitInfo commit, string repoPath)
     {
-        var changedFiles = _git.GetChangedFiles(repoPath, commit.Hash).ToList();
+        var allFiles = _git.GetAllFilesAtCommit(repoPath, commit.Hash).ToList();
         var fileMetrics = new List<FileMetrics>();
 
         using var repo = new Repository(repoPath);
         var gitCommit = repo.Lookup<Commit>(commit.Hash);
 
-        foreach (var filePath in changedFiles)
+        // Optional: extract tree to a temp dir for Lizard analysis
+        IReadOnlyDictionary<string, LizardFileResult> lizardResults =
+            new Dictionary<string, LizardFileResult>();
+        string? tempDir = null;
+        if (_lizard != null && gitCommit != null && allFiles.Count > 0)
         {
-            var language = LanguageDetector.Detect(filePath);
-            int sloc = 0;
+            tempDir = Path.Combine(Path.GetTempPath(), "entropyx_" + commit.Hash[..Math.Min(8, commit.Hash.Length)]);
+            Directory.CreateDirectory(tempDir);
+            ExtractTreeToDir(gitCommit.Tree, tempDir);
+            lizardResults = _lizard.AnalyzeDirectory(tempDir);
+        }
 
-            var entry = gitCommit?.Tree[filePath];
-            if (entry?.TargetType == TreeEntryTargetType.Blob)
+        try
+        {
+            foreach (var filePath in allFiles)
             {
-                var blob = (Blob)entry.Target;
-                using var reader = new StreamReader(blob.GetContentStream());
-                var content = reader.ReadToEnd();
-                var lines = content.Split('\n');
-                sloc = SlocCounter.CountSloc(lines, language);
-            }
+                var language = LanguageDetector.Detect(filePath);
+                int sloc = 0;
 
-            fileMetrics.Add(new FileMetrics(
-                CommitHash: commit.Hash,
-                Path: filePath,
-                Language: language,
-                Sloc: sloc,
-                CyclomaticComplexity: 0,
-                MaintainabilityIndex: 0,
-                SmellsHigh: 0,
-                SmellsMedium: 0,
-                SmellsLow: 0,
-                CouplingProxy: 0,
-                MaintainabilityProxy: 0));
+                var entry = gitCommit?.Tree[filePath];
+                if (entry?.TargetType == TreeEntryTargetType.Blob)
+                {
+                    var blob = (Blob)entry.Target;
+                    using var reader = new StreamReader(blob.GetContentStream());
+                    var content = reader.ReadToEnd();
+                    var lines = content.Split('\n');
+                    sloc = SlocCounter.CountSloc(lines, language);
+                }
+
+                lizardResults.TryGetValue(filePath, out var lizard);
+                var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
+                var mi = ComputeMaintainabilityIndex(sloc, avgCc);
+
+                fileMetrics.Add(new FileMetrics(
+                    CommitHash: commit.Hash,
+                    Path: filePath,
+                    Language: language,
+                    Sloc: sloc,
+                    CyclomaticComplexity: avgCc,
+                    MaintainabilityIndex: mi,
+                    SmellsHigh: lizard?.SmellsHigh ?? 0,
+                    SmellsMedium: lizard?.SmellsMedium ?? 0,
+                    SmellsLow: lizard?.SmellsLow ?? 0,
+                    CouplingProxy: 0,
+                    MaintainabilityProxy: 0));
+            }
+        }
+        finally
+        {
+            if (tempDir is not null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
         }
 
         var entropy = EntropyCalculator.ComputeEntropy(fileMetrics);
@@ -55,6 +79,33 @@ public class ScanPipeline
         var repoMetrics = new RepoMetrics(commit.Hash, fileMetrics.Count, totalSloc, entropy);
 
         return (fileMetrics, repoMetrics);
+    }
+
+    /// <summary>
+    /// Recursively writes all blob entries from a git tree into <paramref name="destDir"/>.
+    /// Non-source directories (matching <see cref="ScanFilter.DefaultIgnoredDirectories"/>) are skipped.
+    /// </summary>
+    private static void ExtractTreeToDir(Tree tree, string destDir, string prefix = "")
+    {
+        foreach (var entry in tree)
+        {
+            if (entry.TargetType == TreeEntryTargetType.Tree)
+            {
+                if (ScanFilter.DefaultIgnoredDirectories.Contains(entry.Name))
+                    continue;
+                var subDir = Path.Combine(destDir, entry.Name);
+                Directory.CreateDirectory(subDir);
+                ExtractTreeToDir((Tree)entry.Target, subDir, prefix + entry.Name + "/");
+            }
+            else if (entry.TargetType == TreeEntryTargetType.Blob)
+            {
+                var destFile = Path.Combine(destDir, entry.Name);
+                var blob = (Blob)entry.Target;
+                using var reader = new StreamReader(blob.GetContentStream());
+                var content = reader.ReadToEnd();
+                File.WriteAllText(destFile, content);
+            }
+        }
     }
 
     public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath, string[]? includePatterns = null)
