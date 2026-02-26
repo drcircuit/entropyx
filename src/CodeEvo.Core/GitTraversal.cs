@@ -75,6 +75,56 @@ public class GitTraversal
         }
     }
 
+    public static bool IsValidRepo(string path)
+    {
+        try
+        {
+            var discovered = Repository.Discover(path);
+            return discovered is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the human-readable repo name and the origin remote URL (empty string if none).
+    /// The name is derived from the remote URL when available, otherwise from the directory name.
+    /// </summary>
+    public static (string Name, string RemoteUrl) GetRepoInfo(string path)
+    {
+        using var repo = new Repository(path);
+        var remoteUrl = repo.Network.Remotes["origin"]?.Url ?? string.Empty;
+        string name;
+        if (remoteUrl.Length > 0)
+        {
+            // Normalise both SSH (git@host:owner/repo.git) and HTTPS (https://host/owner/repo.git) URLs
+            // to extract the "owner/repo" segment:
+            //   1. Strip common scheme/user prefixes.
+            //   2. If a colon appears before the first slash (SSH syntax), strip up to the colon.
+            //      Otherwise, strip up to and including the first slash (HTTPS host part).
+            //   3. Remove a trailing ".git" suffix.
+            name = remoteUrl
+                .Replace("git@", string.Empty)
+                .Replace("https://", string.Empty)
+                .Replace("http://", string.Empty);
+            var colonIdx = name.IndexOf(':');
+            var slashIdx = name.IndexOf('/');
+            if (colonIdx >= 0 && (slashIdx < 0 || colonIdx < slashIdx))
+                name = name[(colonIdx + 1)..];
+            else if (slashIdx >= 0)
+                name = name[(slashIdx + 1)..];
+            if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                name = name[..^4];
+        }
+        else
+        {
+            name = Path.GetFileName(Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar));
+        }
+        return (name, remoteUrl);
+    }
+
     public IEnumerable<string> GetChangedFiles(string repoPath, string commitHash)
     {
         using var repo = new Repository(repoPath);
