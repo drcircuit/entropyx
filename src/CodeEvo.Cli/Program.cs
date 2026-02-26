@@ -157,6 +157,7 @@ var reportDbOption = new Option<string>("--db", () => "entropyx.db", "Path to th
 var reportCommitOption = new Option<string?>("--commit", () => null, "Show metrics for a specific commit hash");
 var reportHtmlOption = new Option<string?>("--html", () => null, "Write a rich HTML report to this file");
 var reportKindOption = new Option<string>("--kind", () => "all", "Filter metrics by code kind: all, production, utility");
+var reportExportFiguresOption = new Option<string?>("--export-figures", () => null, "Export SVG figures to this directory (entropy-over-time.svg, sloc-over-time.svg, sloc-per-file-over-time.svg, cc-over-time.svg, smell-over-time.svg)");
 
 var reportCommand = new Command("report", "Show metrics report");
 reportCommand.AddArgument(reportRepoArg);
@@ -164,9 +165,10 @@ reportCommand.AddOption(reportDbOption);
 reportCommand.AddOption(reportCommitOption);
 reportCommand.AddOption(reportHtmlOption);
 reportCommand.AddOption(reportKindOption);
+reportCommand.AddOption(reportExportFiguresOption);
 
 reportCommand.SetHandler(ReportCommandHandler.Handle,
-    reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption, reportKindOption);
+    reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption, reportKindOption, reportExportFiguresOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
 var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
@@ -176,7 +178,7 @@ toolsCommand.SetHandler((string path) => CheckTools(path), toolsPathArg);
 
 // ── heatmap command ───────────────────────────────────────────────────────────
 var heatmapPathArg     = new Argument<string>("path", () => ".", "Directory to scan");
-var heatmapOutputOpt   = new Option<string?>("--output", () => null, "Save heatmap PNG to this file path");
+var heatmapOutputOpt   = new Option<string?>("--html", () => null, "Save heatmap PNG to this file path");
 var heatmapIncludeOpt  = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
 var heatmapCommand     = new Command("heatmap", "Show a complexity heatmap for source files in a directory");
 heatmapCommand.AddArgument(heatmapPathArg);

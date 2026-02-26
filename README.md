@@ -21,9 +21,14 @@ It walks your git history, collects per-file quality signals (SLOC, cyclomatic c
   - [scan from](#scan-from)
   - [scan full](#scan-full)
   - [scan chk](#scan-chk)
+  - [scan details](#scan-details)
   - [report](#report)
-  - [check tools](#check-tools)
   - [heatmap](#heatmap)
+  - [refactor](#refactor)
+  - [compare](#compare)
+  - [db list](#db-list)
+  - [clear](#clear)
+  - [check tools](#check-tools)
 - [Metrics Reference](#metrics-reference)
 - [Entropy Formula](#entropy-formula)
 - [Citation](#citation)
@@ -89,45 +94,54 @@ You can copy it to any directory on your `PATH` to use it globally.
 
 All commands support `-h` / `--help` for inline documentation.
 
+---
+
 ### scan lang
 
 Detect and list the programming language of every source file in a directory.
 
 ```sh
-entropyx scan lang [path]
+entropyx scan lang [path] [--include <patterns>]
 ```
 
-| Argument | Default | Description |
+| Argument / Option | Default | Description |
 |---|---|---|
 | `path` | `.` | Directory to scan |
+| `--include` | _(all recognised source files)_ | Comma-separated file patterns (e.g. `*.cs,*.ts`) |
 
 ```sh
 entropyx scan lang ./src
+entropyx scan lang . --include *.cs,*.ts
 ```
 
 ---
 
 ### scan here
 
-Scan the current directory without a git repository. Reports SLOC and basic metrics for every recognised source file.
+Scan a directory **without a git repository**. Reports SLOC and basic metrics for every recognised source file. Optionally saves a snapshot `data.json` for later comparison with `compare`.
 
 ```sh
-entropyx scan here [path]
+entropyx scan here [path] [--include <patterns>] [--save <file.json>] [--kind all|production|utility]
 ```
 
-| Argument | Default | Description |
+| Argument / Option | Default | Description |
 |---|---|---|
 | `path` | `.` | Directory to scan |
+| `--include` | _(all recognised source files)_ | Comma-separated file patterns (e.g. `*.cs,*.ts`) |
+| `--save` | _(none)_ | Save a `data.json` snapshot to this path |
+| `--kind` | `all` | Filter by code kind: `all`, `production`, or `utility` |
 
 ```sh
 entropyx scan here ./src
+entropyx scan here . --save baseline.json
+entropyx scan here . --kind production
 ```
 
 ---
 
 ### scan head
 
-Scan only the most recent commit (`HEAD`) of a git repository and store the results.
+Scan only the most recent commit (`HEAD`) of a git repository and store the results in the database.
 
 ```sh
 entropyx scan head [repoPath] [--db <file>]
@@ -146,7 +160,7 @@ entropyx scan head . --db metrics.db
 
 ### scan from
 
-Scan all commits starting from a given commit hash (inclusive) up to `HEAD`.
+Scan all commits starting from a given commit hash (inclusive) up to `HEAD` and store the results.
 
 ```sh
 entropyx scan from <commit> [repoPath] [--db <file>]
@@ -166,7 +180,7 @@ entropyx scan from abc1234 . --db metrics.db
 
 ### scan full
 
-Scan the entire git history of a repository (oldest commit first) and store every commit.  
+Scan the **entire git history** of a repository (oldest commit first) and store every commit.  
 Already-scanned commits are skipped automatically, so re-running is safe.
 
 ```sh
@@ -180,13 +194,14 @@ entropyx scan full [repoPath] [--db <file>]
 
 ```sh
 entropyx scan full /path/to/repo
+entropyx scan full . --db metrics.db
 ```
 
 ---
 
 ### scan chk
 
-Scan only **checkpoint commits** (tagged commits and merge commits). This is a faster alternative to `scan full` for large repositories where you only want to track significant milestones.
+Scan only **checkpoint commits** (tagged commits and merge commits). A faster alternative to `scan full` for large repositories where you only want to track significant milestones.
 
 ```sh
 entropyx scan chk [repoPath] [--db <file>]
@@ -203,12 +218,33 @@ entropyx scan chk . --db metrics.db
 
 ---
 
-### report
+### scan details
 
-Print a summary of all stored commit metrics. Optionally filter by a commit hash prefix or generate a rich HTML report with graphs, timeseries, and issue highlights.
+Scan the current `HEAD` commit and display a detailed per-language SLOC breakdown, per-file metrics table, notable events (troubled/heroic commits), and a health assessment. Optionally writes a rich HTML drilldown report. Uses the database for historical context when available.
 
 ```sh
-entropyx report <repoPath> [--db <file>] [--commit <hash>] [--html <outputFile>]
+entropyx scan details [repoPath] [--db <file>] [--html <outputFile>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `repoPath` | `.` | Path to the git repository |
+| `--db` | `entropyx.db` | SQLite database file (for historical context) |
+| `--html` | _(none)_ | Write a rich HTML drilldown report to this file |
+
+```sh
+entropyx scan details .
+entropyx scan details . --db metrics.db --html drilldown.html
+```
+
+---
+
+### report
+
+Print a summary of all stored commit metrics. Optionally filter by a commit hash prefix, generate a rich HTML report with graphs and issue highlights, or export standalone vector SVG charts for use in papers and whitepapers.
+
+```sh
+entropyx report <repoPath> [--db <file>] [--commit <hash>] [--html <outputFile>] [--export-figures <dir>] [--kind all|production|utility]
 ```
 
 | Argument / Option | Default | Description |
@@ -217,6 +253,8 @@ entropyx report <repoPath> [--db <file>] [--commit <hash>] [--html <outputFile>]
 | `--db` | `entropyx.db` | SQLite database file |
 | `--commit` | _(all)_ | Show only the commit matching this hash prefix |
 | `--html` | _(none)_ | Write a rich HTML report to this file |
+| `--export-figures` | _(none)_ | Export vector SVG charts to this directory |
+| `--kind` | `all` | Filter metrics by code kind: `all`, `production`, or `utility` |
 
 ```sh
 # Show all commits
@@ -227,16 +265,162 @@ entropyx report . --db metrics.db --commit abc1234
 
 # Generate a rich HTML report
 entropyx report . --db metrics.db --html report.html
+
+# Export SVG figures only (e.g. for whitepapers)
+entropyx report . --db metrics.db --export-figures ./figures
+
+# Generate HTML report and export SVG figures together
+entropyx report . --db metrics.db --html report.html --export-figures ./figures
 ```
 
 The HTML report includes:
+- **Health gauges** – semi-circular gauges for entropy, complexity, and smell scores. The entropy gauge shows historical min/avg/max across all scanned commits; the CC and smell gauges show low/high threshold reference markers.
 - **Entropy timeseries** – entropy score plotted over every scanned commit
-- **Codebase growth charts** – SLOC and file count over time
-- **Issues section** – top 10 files by size, cyclomatic complexity, and smell score, each with a colored severity badge
+- **Codebase growth charts** – SLOC, file count, and SLOC-per-file over time
+- **CC and Smell timeseries** – avg cyclomatic complexity and avg smell score over time
+- **Complexity heatmap** – per-file badness scores for the latest commit, sorted hottest-first
+- **Issues section** – top 10 files by size, cyclomatic complexity, smell score, and coupling, each with a colored severity badge
 - **Troubled commits** – commits that caused a statistically significant entropy _increase_
 - **Heroic commits** – commits that caused a statistically significant entropy _decrease_
-- **Full commit table** – all commits with their entropy score and delta, color-coded green/red
-- **Relative assessment** – when 3 or more snapshots are stored, the assessment shows the current score as a percentile of the repository's own recorded history, so drift is judged against the repo's evolution rather than an absolute scale
+- **Full commit table** – all commits with entropy score and delta, color-coded green/red
+- **Relative assessment** – the current score shown at its historical percentile so drift is judged against the repo's own evolution
+
+The `--export-figures` option writes the following standalone vector SVG files (ideal for academic papers):
+
+| File | Content |
+|---|---|
+| `entropy-over-time.svg` | Entropy score over git history |
+| `sloc-over-time.svg` | Total SLOC over git history |
+| `sloc-per-file-over-time.svg` | Average SLOC per file over git history |
+| `cc-over-time.svg` | Average cyclomatic complexity over git history |
+| `smell-over-time.svg` | Average weighted smell score over git history |
+
+---
+
+### heatmap
+
+Scan a directory and render a **complexity heatmap** showing per-file hotspots. Optionally saves the heatmap as a PNG image.
+
+```sh
+entropyx heatmap [path] [--html <file.png>] [--include <patterns>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `path` | `.` | Directory to scan |
+| `--html` | _(none)_ | Save the heatmap as a PNG image to this path |
+| `--include` | _(all recognised source files)_ | Comma-separated file patterns (e.g. `*.cs,*.ts`) |
+
+**Console output** – files are sorted hottest-first and each row shows a 10-block heat bar coloured on a traffic-light gradient (green → yellow → red) together with SLOC, cyclomatic complexity, coupling, and a raw badness score.
+
+**PNG image** (`--html`) – generates a PNG using an IR camera colour palette (black → indigo → blue → cyan → green → yellow → orange → red → white) with one row per file and a colour-scale legend at the bottom.
+
+```sh
+# Show heatmap in the console for the current directory
+entropyx heatmap .
+
+# Show heatmap and save an IR-palette PNG
+entropyx heatmap ./src --html hotspots.png
+
+# Restrict to C# and TypeScript files only
+entropyx heatmap . --include *.cs,*.ts --html hotspots.png
+```
+
+---
+
+### refactor
+
+Rank source files by their refactoring priority and print the top candidates. Optionally writes an HTML report. Useful for identifying where to focus technical-debt reduction efforts.
+
+```sh
+entropyx refactor [path] [--focus <metric>] [--top <n>] [--html <outputFile>] [--include <patterns>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `path` | `.` | Directory to scan |
+| `--focus` | `overall` | Metric(s) to rank by: `overall`, `sloc`, `cc`, `mi`, `smells`, `coupling`, or a comma-separated combination |
+| `--top` | `10` | Number of files to list |
+| `--html` | _(none)_ | Write a rich HTML refactor report to this file |
+| `--include` | _(all recognised source files)_ | Comma-separated file patterns (e.g. `*.cs,*.ts`) |
+
+```sh
+# Show top 10 files by overall refactor priority
+entropyx refactor .
+
+# Focus on cyclomatic complexity, show top 20
+entropyx refactor . --focus cc --top 20
+
+# Generate an HTML refactor report
+entropyx refactor . --html refactor.html
+
+# Focus on multiple metrics
+entropyx refactor ./src --focus cc,smells --html refactor.html
+```
+
+---
+
+### compare
+
+Compare two `data.json` snapshots (produced by `scan here --save` or `report --html`) and print an evolutionary assessment showing which files improved, regressed, appeared, or disappeared. Optionally writes an HTML comparison report.
+
+```sh
+entropyx compare <baseline> <current> [--html <outputFile>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `baseline` | _(required)_ | Path to the baseline `data.json` file |
+| `current` | _(required)_ | Path to the current `data.json` file |
+| `--html` | _(none)_ | Write a rich HTML comparison report to this file |
+
+```sh
+# Compare two snapshots on the console
+entropyx compare baseline.json current.json
+
+# Generate an HTML comparison report
+entropyx compare baseline.json current.json --html comparison.html
+```
+
+> **Tip:** use `scan here --save` to capture a snapshot before and after a refactoring session, then run `compare` to see the impact.
+
+---
+
+### db list
+
+List all repositories stored in the database and their total commit counts.
+
+```sh
+entropyx db list [--db <file>]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--db` | `entropyx.db` | SQLite database file |
+
+```sh
+entropyx db list
+entropyx db list --db metrics.db
+```
+
+---
+
+### clear
+
+Delete all scanned data from the database for the given repository. Prompts for confirmation before erasing.
+
+```sh
+entropyx clear [repoPath] [--db <file>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `repoPath` | `.` | Path to the git repository whose data to clear |
+| `--db` | `entropyx.db` | SQLite database file |
+
+```sh
+entropyx clear . --db metrics.db
+```
 
 ---
 
@@ -245,38 +429,12 @@ The HTML report includes:
 Verify that external tools (`git`, `cloc`) are available and print platform-specific install instructions for any that are missing.
 
 ```sh
+entropyx check tools [path]
+```
+
+```sh
 entropyx check tools
-```
-
----
-
-### heatmap
-
-Scan a directory and render a **complexity heatmap** showing per-file hotspots.
-
-```sh
-entropyx heatmap [path] [--output <file.png>] [--include <patterns>]
-```
-
-| Argument / Option | Default | Description |
-|---|---|---|
-| `path` | `.` | Directory to scan |
-| `--output` | _(none)_ | Save the heatmap as a PNG image to this path |
-| `--include` | _(all recognised source files)_ | Comma-separated file patterns to include (e.g. `*.cs,*.ts`) |
-
-**Console output** – files are sorted hottest-first and each row shows a 10-block heat bar coloured on a traffic-light gradient (green → yellow → red) together with SLOC, cyclomatic complexity, coupling, and a raw badness score.
-
-**PNG image** (`--output`) – generates a PNG using an IR camera colour palette (black → indigo → blue → cyan → green → yellow → orange → red → white) with one row per file and a colour-scale legend at the bottom.
-
-```sh
-# Show heatmap in the console for the current directory
-entropyx heatmap .
-
-# Show heatmap and save an IR-palette PNG
-entropyx heatmap ./src --output hotspots.png
-
-# Restrict to C# and TypeScript files only
-entropyx heatmap . --include *.cs,*.ts --output hotspots.png
+entropyx check tools ./src
 ```
 
 ---
