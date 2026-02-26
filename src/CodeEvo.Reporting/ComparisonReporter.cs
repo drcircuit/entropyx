@@ -720,53 +720,36 @@ public class ComparisonReporter
                 <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
               </div>
             </section>
-            <script>
-            (function() {
-              var bLabels = [{{bLabels}}];
-              var bData   = [{{bData}}];
-              var cLabels = [{{cLabels}}];
-              var cData   = [{{cData}}];
-              // Merge all labels by normalizing both series to index-based x
-              var ctx = document.getElementById('trendChart').getContext('2d');
-              new Chart(ctx, {
-                type: 'line',
-                data: {
-                  labels: bLabels.length >= cLabels.length ? bLabels : cLabels,
-                  datasets: [
-                    {
-                      label: 'Baseline',
-                      data: bData.map((v,i) => ({x: i, y: parseFloat(v)})),
-                      borderColor: '#60a5fa',
-                      backgroundColor: 'rgba(96,165,250,.1)',
-                      borderWidth: 2,
-                      pointRadius: bData.length <= 1 ? 5 : 0,
-                      tension: 0.3,
-                      parsing: false
-                    },
-                    {
-                      label: 'Current',
-                      data: cData.map((v,i) => ({x: i, y: parseFloat(v)})),
-                      borderColor: '#f97316',
-                      backgroundColor: 'rgba(249,115,22,.1)',
-                      borderWidth: 2,
-                      pointRadius: cData.length <= 1 ? 5 : 0,
-                      tension: 0.3,
-                      parsing: false
-                    }
-                  ]
-                },
-                options: {
-                  responsive: true, maintainAspectRatio: false,
-                  plugins: { legend: { labels: { color: '#888' } } },
-                  scales: {
-                    x: { type: 'linear', ticks: { color: '#888' }, grid: { color: '#2d3044' } },
-                    y: { ticks: { color: '#888' }, grid: { color: '#2d3044' } }
-                  }
-                }
-              });
-            })();
-            </script>
             """);
+
+        sb.AppendLine("<script>");
+        sb.AppendLine("(function() {");
+        sb.AppendLine($"  var bLabels=[{bLabels}], bData=[{bData}], cLabels=[{cLabels}], cData=[{cData}];");
+        sb.AppendLine("  function mkDs(lbl, data, col, bg, pr) {");
+        sb.AppendLine("    return { label: lbl, data: data.map((v,i) => ({x:i, y:+v})),");
+        sb.AppendLine("             borderColor: col, backgroundColor: bg, borderWidth: 2,");
+        sb.AppendLine("             pointRadius: pr, tension: 0.3, parsing: false };");
+        sb.AppendLine("  }");
+        sb.AppendLine($"  var bPr={(bHistory.Count <= 1 ? 5 : 0)}, cPr={(cHistory.Count <= 1 ? 5 : 0)};");
+        sb.AppendLine("  var ctx = document.getElementById('trendChart').getContext('2d');");
+        sb.AppendLine("  new Chart(ctx, {");
+        sb.AppendLine("    type: 'line',");
+        sb.AppendLine("    data: {");
+        sb.AppendLine("      labels: bLabels.length >= cLabels.length ? bLabels : cLabels,");
+        sb.AppendLine("      datasets: [mkDs('Baseline', bData, '#60a5fa', 'rgba(96,165,250,.1)', bPr),");
+        sb.AppendLine("                 mkDs('Current',  cData, '#f97316', 'rgba(249,115,22,.1)',  cPr)]");
+        sb.AppendLine("    },");
+        sb.AppendLine("    options: {");
+        sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
+        sb.AppendLine("      plugins: { legend: { labels: { color: '#888' } } },");
+        sb.AppendLine("      scales: {");
+        sb.AppendLine("        x: { type: 'linear', ticks: { color: '#888' }, grid: { color: '#2d3044' } },");
+        sb.AppendLine("        y: { ticks: { color: '#888' }, grid: { color: '#2d3044' } }");
+        sb.AppendLine("      }");
+        sb.AppendLine("    }");
+        sb.AppendLine("  });");
+        sb.AppendLine("})();");
+        sb.AppendLine("</script>");
     }
 
     private static void AppendFilesComparison(StringBuilder sb, DataJsonReport baseline, DataJsonReport current)
@@ -775,7 +758,6 @@ public class ComparisonReporter
         var removedFiles = GetRemovedFiles(baseline, current).Take(TopFilesCount).ToList();
         var worsened     = GetWorsenedFiles(baseline, current).Take(TopFilesCount).ToList();
         var improved     = GetImprovedFiles(baseline, current).Take(TopFilesCount).ToList();
-
         var baseMap = baseline.LatestFiles.ToDictionary(f => f.Path);
 
         sb.AppendLine("""
@@ -783,47 +765,29 @@ public class ComparisonReporter
               <div class="section-title">File-Level Changes</div>
             """);
 
-        // Worsened files
-        string worsenedMeta = worsened.Count == 0 ? "none" : $"{worsened.Count} file(s)";
-        sb.AppendLine($"    <details open><summary>Files with Higher Badness (Worsened) <span class=\"summary-meta\">{EscapeHtml(worsenedMeta)}</span></summary>");
-        sb.AppendLine("      <div class=\"details-body\">");
-        if (worsened.Count == 0)
-            sb.AppendLine("        <div style=\"color:var(--muted);font-style:italic\">No files worsened. ✓</div>");
-        else
-            AppendFilesDiffTable(sb, worsened, baseMap, isWorsened: true);
-        sb.AppendLine("      </div></details>");
-
-        // Improved files
-        string improvedMeta = improved.Count == 0 ? "none" : $"{improved.Count} file(s)";
-        sb.AppendLine($"    <details><summary>Files with Lower Badness (Improved) <span class=\"summary-meta\">{EscapeHtml(improvedMeta)}</span></summary>");
-        sb.AppendLine("      <div class=\"details-body\">");
-        if (improved.Count == 0)
-            sb.AppendLine("        <div style=\"color:var(--muted);font-style:italic\">No files improved.</div>");
-        else
-            AppendFilesDiffTable(sb, improved, baseMap, isWorsened: false);
-        sb.AppendLine("      </div></details>");
-
-        // New files
-        string newMeta = newFiles.Count == 0 ? "none" : $"{newFiles.Count} file(s)";
-        sb.AppendLine($"    <details><summary>New Files <span class=\"summary-meta\">{EscapeHtml(newMeta)}</span></summary>");
-        sb.AppendLine("      <div class=\"details-body\">");
-        if (newFiles.Count == 0)
-            sb.AppendLine("        <div style=\"color:var(--muted);font-style:italic\">No new files.</div>");
-        else
-            AppendFilesTable(sb, newFiles);
-        sb.AppendLine("      </div></details>");
-
-        // Removed files
-        string removedMeta = removedFiles.Count == 0 ? "none" : $"{removedFiles.Count} file(s)";
-        sb.AppendLine($"    <details><summary>Removed Files <span class=\"summary-meta\">{EscapeHtml(removedMeta)}</span></summary>");
-        sb.AppendLine("      <div class=\"details-body\">");
-        if (removedFiles.Count == 0)
-            sb.AppendLine("        <div style=\"color:var(--muted);font-style:italic\">No removed files.</div>");
-        else
-            AppendFilesTable(sb, removedFiles);
-        sb.AppendLine("      </div></details>");
+        AppendDetailsGroup(sb, "Files with Higher Badness (Worsened)", worsened.Count, "No files worsened. ✓",
+            () => AppendFilesDiffTable(sb, worsened, baseMap, isWorsened: true), open: true);
+        AppendDetailsGroup(sb, "Files with Lower Badness (Improved)", improved.Count, "No files improved.",
+            () => AppendFilesDiffTable(sb, improved, baseMap, isWorsened: false));
+        AppendDetailsGroup(sb, "New Files", newFiles.Count, "No new files.",
+            () => AppendFilesTable(sb, newFiles));
+        AppendDetailsGroup(sb, "Removed Files", removedFiles.Count, "No removed files.",
+            () => AppendFilesTable(sb, removedFiles));
 
         sb.AppendLine("</section>");
+    }
+
+    private static void AppendDetailsGroup(StringBuilder sb, string title, int count,
+        string emptyMsg, Action appendContent, bool open = false)
+    {
+        string meta = count == 0 ? "none" : $"{count} file(s)";
+        sb.AppendLine($"    <details{(open ? " open" : "")}><summary>{EscapeHtml(title)} <span class=\"summary-meta\">{EscapeHtml(meta)}</span></summary>");
+        sb.AppendLine("      <div class=\"details-body\">");
+        if (count == 0)
+            sb.AppendLine($"        <div style=\"color:var(--muted);font-style:italic\">{emptyMsg}</div>");
+        else
+            appendContent();
+        sb.AppendLine("      </div></details>");
     }
 
     private static void AppendFilesDiffTable(

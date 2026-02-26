@@ -139,62 +139,35 @@ public class ConsoleReporter
     public void ReportScanChart(IReadOnlyList<FileMetrics> files, int topN = 10)
     {
         bool hasCc = files.Any(f => f.CyclomaticComplexity > 0);
-
-        var top = hasCc
-            ? files.Where(f => f.CyclomaticComplexity > 0)
-                   .OrderByDescending(f => f.CyclomaticComplexity)
-                   .Take(topN)
-                   .ToList()
-            : files.Where(f => f.Sloc > 0)
-                   .OrderByDescending(f => f.Sloc)
-                   .Take(topN)
-                   .ToList();
-
-        if (top.Count == 0)
-            return;
-
+        var top = (hasCc
+            ? files.Where(f => f.CyclomaticComplexity > 0).OrderByDescending(f => f.CyclomaticComplexity)
+            : files.Where(f => f.Sloc > 0).OrderByDescending(f => f.Sloc))
+            .Take(topN).ToList();
         string label = hasCc ? "[bold]Top files by Cyclomatic Complexity[/]" : "[bold]Top files by SLOC[/]";
-
-        var chart = new BarChart()
-            .Width(80)
-            .Label(label)
-            .CenterLabel();
-
-        for (int i = 0; i < top.Count; i++)
-        {
-            var f = top[i];
-            var barLabel = Path.GetFileName(f.Path);
-            double value = hasCc ? Math.Round(f.CyclomaticComplexity, 1) : f.Sloc;
-            var color = hasCc ? CcColor(f.CyclomaticComplexity) : SlocColor(f.Sloc);
-            chart.AddItem(barLabel, value, color);
-        }
-
-        AnsiConsole.WriteLine();
-        AnsiConsole.Write(chart);
+        RenderBarChart(top, label, f =>
+            (Path.GetFileName(f.Path),
+             hasCc ? Math.Round(f.CyclomaticComplexity, 1) : (double)f.Sloc,
+             hasCc ? CcColor(f.CyclomaticComplexity) : SlocColor(f.Sloc)));
     }
 
     public void ReportSmellsChart(IReadOnlyList<FileMetrics> files, int topN = 10)
     {
-        var top = files
-            .Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
-            .OrderByDescending(WeightedSmells)
-            .Take(topN)
-            .ToList();
+        var top = files.Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
+            .OrderByDescending(WeightedSmells).Take(topN).ToList();
+        RenderBarChart(top, "[bold]Top files by Code Smells (weighted H×3 + M×2 + L×1)[/]",
+            f => { var s = WeightedSmells(f); return (Path.GetFileName(f.Path), (double)s, SmellColor(s)); });
+    }
 
-        if (top.Count == 0)
-            return;
-
-        var chart = new BarChart()
-            .Width(80)
-            .Label("[bold]Top files by Code Smells (weighted H×3 + M×2 + L×1)[/]")
-            .CenterLabel();
-
-        for (int i = 0; i < top.Count; i++)
+    private static void RenderBarChart<T>(List<T> items, string label,
+        Func<T, (string name, double value, Color color)> selector)
+    {
+        if (items.Count == 0) return;
+        var chart = new BarChart().Width(80).Label(label).CenterLabel();
+        foreach (var item in items)
         {
-            int score = WeightedSmells(top[i]);
-            chart.AddItem(Path.GetFileName(top[i].Path), score, SmellColor(score));
+            var (name, value, color) = selector(item);
+            chart.AddItem(name, value, color);
         }
-
         AnsiConsole.WriteLine();
         AnsiConsole.Write(chart);
     }
@@ -253,32 +226,22 @@ public class ConsoleReporter
             return;
         }
 
-        if (troubled.Count > 0)
-        {
-            AnsiConsole.MarkupLine("[bold red]😈 Troubled Commits (entropy spikes):[/]");
-            foreach (var d in troubled.Take(5))
-            {
-                var hash = d.Commit.Hash[..Math.Min(8, d.Commit.Hash.Length)];
-                AnsiConsole.MarkupLine(
-                    $"  [yellow]{Markup.Escape(hash)}[/]  " +
-                    $"[grey]{d.Commit.Timestamp:yyyy-MM-dd}[/]  " +
-                    $"Entropy: [magenta]{d.Metrics.EntropyScore:F4}[/]  " +
-                    $"Δ [red]+{d.Delta:F4}[/]");
-            }
-        }
+        PrintEventGroup(troubled, "[bold red]😈 Troubled Commits (entropy spikes):[/]", "red");
+        PrintEventGroup(heroic,   "[bold green]🦸 Heroic Commits (entropy drops):[/]",  "green");
+    }
 
-        if (heroic.Count > 0)
+    private static void PrintEventGroup(IReadOnlyList<HtmlReporter.CommitDelta> deltas, string header, string deltaColor)
+    {
+        if (deltas.Count == 0) return;
+        AnsiConsole.MarkupLine(header);
+        foreach (var d in deltas.Take(5))
         {
-            AnsiConsole.MarkupLine("[bold green]🦸 Heroic Commits (entropy drops):[/]");
-            foreach (var d in heroic.Take(5))
-            {
-                var hash = d.Commit.Hash[..Math.Min(8, d.Commit.Hash.Length)];
-                AnsiConsole.MarkupLine(
-                    $"  [yellow]{Markup.Escape(hash)}[/]  " +
-                    $"[grey]{d.Commit.Timestamp:yyyy-MM-dd}[/]  " +
-                    $"Entropy: [magenta]{d.Metrics.EntropyScore:F4}[/]  " +
-                    $"Δ [green]{d.Delta:F4}[/]");
-            }
+            var hash = d.Commit.Hash[..Math.Min(8, d.Commit.Hash.Length)];
+            AnsiConsole.MarkupLine(
+                $"  [yellow]{Markup.Escape(hash)}[/]  " +
+                $"[grey]{d.Commit.Timestamp:yyyy-MM-dd}[/]  " +
+                $"Entropy: [magenta]{d.Metrics.EntropyScore:F4}[/]  " +
+                $"Δ [{deltaColor}]{d.Delta:F4}[/]");
         }
     }
 
