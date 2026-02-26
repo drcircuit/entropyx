@@ -1,12 +1,12 @@
-using System.Collections.Concurrent;
 using System.CommandLine;
-using System.Runtime.InteropServices;
 using CodeEvo.Adapters;
+using CodeEvo.Cli;
 using CodeEvo.Core;
 using CodeEvo.Core.Models;
 using CodeEvo.Reporting;
 using CodeEvo.Storage;
 using Spectre.Console;
+using static CodeEvo.Cli.CliHelpers;
 
 var rootCommand = new RootCommand("EntropyX - git history analyzer");
 
@@ -139,75 +139,8 @@ var scanDetailsCommand = new Command("details", "Scan HEAD commit and show detai
 scanDetailsCommand.AddArgument(scanDetailsRepoArg);
 scanDetailsCommand.AddOption(scanDetailsDbOption);
 scanDetailsCommand.AddOption(scanDetailsHtmlOption);
-scanDetailsCommand.SetHandler((string repoPath, string dbPath, string? htmlPath) =>
-{
-    var pipeline  = new ScanPipeline(new LizardAnalyzer());
-    var reporter  = new ConsoleReporter();
-    var traversal = new GitTraversal();
-
-    var headCommit = traversal.GetAllCommits(repoPath).FirstOrDefault();
-    if (headCommit is null) { AnsiConsole.MarkupLine("[red]No commits found.[/]"); return; }
-
-    IReadOnlyList<FileMetrics> files = [];
-    RepoMetrics repoMetrics = new(string.Empty, 0, 0, 0.0);
-    AnsiConsole.Status()
-        .Spinner(Spinner.Known.Dots)
-        .Start($"Scanning {headCommit.Hash[..Math.Min(8, headCommit.Hash.Length)]}...", _ =>
-        {
-            (files, repoMetrics) = pipeline.ScanCommit(headCommit, repoPath);
-        });
-
-    // Load historical context from the database when available
-    List<(CommitInfo, RepoMetrics)> history = [];
-    RepoMetrics? prevMetrics = null;
-    IReadOnlyList<HtmlReporter.CommitDelta> troubled = [];
-    IReadOnlyList<HtmlReporter.CommitDelta> heroic   = [];
-
-    if (File.Exists(dbPath))
-    {
-        var db = new DatabaseContext();
-        db.Initialize(dbPath);
-        var allMetrics = new RepoMetricsRepository(db).GetAll();
-        var allCommits = new CommitRepository(db).GetAll();
-
-        var metricsByHash = allMetrics.ToDictionary(m => m.CommitHash);
-        history = allCommits
-            .Where(c => metricsByHash.ContainsKey(c.Hash))
-            .OrderBy(c => c.Timestamp)
-            .Select(c => (c, metricsByHash[c.Hash]))
-            .ToList();
-
-        if (history.Count > 0)
-        {
-            var deltas = HtmlReporter.ComputeDeltas(history);
-            (troubled, heroic) = HtmlReporter.ClassifyCommits(deltas);
-
-            int headIdx = history.FindIndex(x => x.Item1.Hash == headCommit.Hash);
-            if (headIdx > 0)
-                prevMetrics = history[headIdx - 1].Item2;
-        }
-    }
-
-    // ── CLI output ────────────────────────────────────────────────────────────
-    reporter.ReportSlocByLanguage(files);
-    reporter.ReportFileMetrics(files.Where(f => f.Language.Length > 0).ToList());
-    reporter.ReportNotableEvents(troubled, heroic);
-    reporter.ReportAssessment(repoMetrics, prevMetrics, history.Select(h => h.Item2).ToList());
-
-    // ── HTML output ───────────────────────────────────────────────────────────
-    if (htmlPath is not null)
-    {
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .Start("Generating HTML drilldown report...", _ =>
-            {
-                var htmlReporter = new HtmlReporter();
-                var html = htmlReporter.GenerateDrilldown(headCommit, repoMetrics, files, history, prevMetrics);
-                File.WriteAllText(htmlPath, html);
-            });
-        AnsiConsole.MarkupLine($"[green]✓[/] HTML drilldown report written to [cyan]{Markup.Escape(htmlPath)}[/]");
-    }
-}, scanDetailsRepoArg, scanDetailsDbOption, scanDetailsHtmlOption);
+scanDetailsCommand.SetHandler(ScanDetailsCommandHandler.Handle,
+    scanDetailsRepoArg, scanDetailsDbOption, scanDetailsHtmlOption);
 scanCommand.AddCommand(scanDetailsCommand);
 
 // ── check command group ───────────────────────────────────────────────────────
@@ -232,99 +165,8 @@ reportCommand.AddOption(reportCommitOption);
 reportCommand.AddOption(reportHtmlOption);
 reportCommand.AddOption(reportKindOption);
 
-reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHash, string? htmlPath, string kind) =>
-{
-    var reporter = new ConsoleReporter();
-    var db = new DatabaseContext();
-    db.Initialize(dbPath);
-    var repoMetricsRepo = new RepoMetricsRepository(db);
-    var commitRepo = new CommitRepository(db);
-    var fileMetricsRepo = new FileMetricsRepository(db);
-
-    var allMetrics = repoMetricsRepo.GetAll();
-    if (allMetrics.Count == 0)
-    {
-        Console.WriteLine("No metrics found. Run 'scan full', 'scan head', 'scan from', or 'scan chk' first.");
-        return;
-    }
-
-    var filtered = allMetrics
-        .Where(rm => commitHash is null || rm.CommitHash.StartsWith(commitHash, StringComparison.OrdinalIgnoreCase))
-        .ToList();
-
-    foreach (var rm in filtered)
-        reporter.ReportRepoMetrics(rm);
-
-    reporter.ReportEntropyTrend(filtered);
-
-    if (htmlPath is not null)
-    {
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .Start("Generating HTML report...", _ =>
-            {
-                // Build ordered commit history
-                var allCommits = commitRepo.GetAll();
-                var commitByHash = allCommits.ToDictionary(c => c.Hash);
-                var metricsByHash = allMetrics.ToDictionary(m => m.CommitHash);
-
-                var history = allCommits
-                    .Where(c => metricsByHash.ContainsKey(c.Hash))
-                    .OrderBy(c => c.Timestamp)
-                    .Select(c => (c, metricsByHash[c.Hash]))
-                    .ToList();
-
-                // Fall back: use metrics in stored order when commit info is unavailable
-                if (history.Count == 0)
-                {
-                    history = allMetrics
-                        .Select(m =>
-                        {
-                            commitByHash.TryGetValue(m.CommitHash, out var ci);
-                            ci ??= new CommitInfo(m.CommitHash, DateTimeOffset.MinValue, []);
-                            return (ci, m);
-                        })
-                        .ToList();
-                }
-
-                // Get file metrics for the latest (most recent) commit, filtered by kind
-                IReadOnlyList<FileMetrics> latestFiles = [];
-                if (history.Count > 0)
-                    latestFiles = FilterByKind(fileMetricsRepo.GetByCommit(history[^1].Item1.Hash), kind);
-
-                // When --kind is specified, rebuild per-commit entropy from stored file metrics
-                if (!string.Equals(kind, "all", StringComparison.OrdinalIgnoreCase))
-                {
-                    history = history.Select(h =>
-                    {
-                        var commitFiles = FilterByKind(fileMetricsRepo.GetByCommit(h.Item1.Hash), kind);
-                        var kindEntropy = EntropyCalculator.ComputeEntropy(commitFiles);
-                        var kindMetrics = new RepoMetrics(
-                            h.Item2.CommitHash,
-                            commitFiles.Count,
-                            commitFiles.Sum(f => f.Sloc),
-                            kindEntropy);
-                        return (h.Item1, kindMetrics);
-                    }).ToList();
-                }
-
-                var htmlReporter = new HtmlReporter();
-                var html = htmlReporter.Generate(history, latestFiles);
-                File.WriteAllText(htmlPath, html);
-
-                // Write data.json alongside the HTML for later comparison
-                var jsonPath = Path.ChangeExtension(htmlPath, ".json");
-                var json = HtmlReporter.GenerateDataJson(history, latestFiles);
-                File.WriteAllText(jsonPath, json);
-            });
-
-        AnsiConsole.MarkupLine($"[green]✓[/] HTML report written to [cyan]{Markup.Escape(htmlPath)}[/]");
-        var jsonOutputPath = Path.ChangeExtension(htmlPath, ".json");
-        AnsiConsole.MarkupLine($"[green]✓[/] Data JSON written to [cyan]{Markup.Escape(jsonOutputPath)}[/]");
-    }
-
-    await Task.CompletedTask;
-}, reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption, reportKindOption);
+reportCommand.SetHandler(ReportCommandHandler.Handle,
+    reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption, reportKindOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
 var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
@@ -555,144 +397,3 @@ rootCommand.AddCommand(dbCommand);
 rootCommand.AddCommand(clearCommand);
 
 return await rootCommand.InvokeAsync(args);
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-static string[]? ParsePatterns(string? input) =>
-    input?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-/// <summary>Filters a list of file metrics by the given kind string (all/production/utility).</summary>
-static IReadOnlyList<FileMetrics> FilterByKind(IReadOnlyList<FileMetrics> files, string kind) =>
-    kind.ToLowerInvariant() switch
-    {
-        "production" => files.Where(f => f.Kind == CodeKind.Production).ToList(),
-        "utility"    => files.Where(f => f.Kind == CodeKind.Utility).ToList(),
-        _            => files  // "all" or unrecognised → no filtering
-    };
-
-static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRepository, ScanPipeline, GitTraversal, DatabaseContext)
-    BuildScanDeps(string dbPath)
-{
-    var db = new DatabaseContext();
-    db.Initialize(dbPath);
-    return (new ConsoleReporter(), new CommitRepository(db), new FileMetricsRepository(db),
-            new RepoMetricsRepository(db), new ScanPipeline(new LizardAnalyzer()), new GitTraversal(), db);
-}
-
-static void RunGitScan(
-    IEnumerable<CommitInfo> commits,
-    ScanPipeline pipeline,
-    CommitRepository commitRepo,
-    FileMetricsRepository fileRepo,
-    RepoMetricsRepository repoMetricsRepo,
-    ConsoleReporter reporter,
-    string repoPath,
-    DatabaseContext db)
-{
-    // Register repo metadata so 'db list' can show it
-    if (GitTraversal.IsValidRepo(repoPath))
-    {
-        var (repoName, remoteUrl) = GitTraversal.GetRepoInfo(repoPath);
-        db.RegisterRepo(repoName, remoteUrl);
-    }
-    // Phase 1: discover which commits still need scanning
-    List<CommitInfo> toScan = [];
-    int skipped = 0;
-    AnsiConsole.Status()
-        .Spinner(Spinner.Known.Dots)
-        .Start("Discovering commits...", _ =>
-        {
-            foreach (var commit in commits)
-            {
-                if (commitRepo.Exists(commit.Hash)) { skipped++; continue; }
-                toScan.Add(commit);
-            }
-        });
-
-    if (skipped > 0)
-        AnsiConsole.MarkupLine($"[grey]Skipped {skipped} already-scanned commit(s).[/]");
-
-    if (toScan.Count == 0)
-    {
-        AnsiConsole.MarkupLine("[grey]No new commits to scan.[/]");
-        return;
-    }
-
-    // Phase 2: scan commits in parallel with a live progress bar
-    var results = new ConcurrentBag<(CommitInfo Commit, IReadOnlyList<FileMetrics> Files, RepoMetrics RepoMetrics)>();
-    AnsiConsole.Progress()
-        .AutoClear(false)
-        .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new SpinnerColumn())
-        .Start(ctx =>
-        {
-            var task = ctx.AddTask($"Scanning {toScan.Count} commit(s)", maxValue: toScan.Count);
-            Parallel.ForEach(toScan, commit =>
-            {
-                var (files, repoMetrics) = pipeline.ScanCommit(commit, repoPath);
-                results.Add((commit, files, repoMetrics));
-                task.Increment(1);
-            });
-        });
-
-    // Phase 3: store and report results in chronological order
-    foreach (var (commit, files, repoMetrics) in results.OrderBy(r => r.Commit.Timestamp))
-    {
-        commitRepo.Insert(commit);
-        foreach (var fm in files)
-            if (!fileRepo.Exists(fm.CommitHash, fm.Path))
-                fileRepo.Insert(fm);
-        repoMetricsRepo.Insert(repoMetrics);
-        reporter.ReportCommit(commit, repoMetrics);
-    }
-}
-
-static void CheckTools(string path)
-{
-    var procurement = new ToolProcurement();
-    var reporter = new ConsoleReporter();
-    string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows"
-        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : "linux";
-
-    List<string> detectedLanguages;
-    if (!Directory.Exists(path))
-    {
-        Console.Error.WriteLine($"Warning: path '{path}' does not exist.");
-        detectedLanguages = [];
-    }
-    else
-    {
-        var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(path);
-        detectedLanguages = Directory.EnumerateFiles(path, "*", new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true
-            })
-            .Where(f => !ScanFilter.IsPathIgnored(f, path) && !ScanFilter.IsExIgnored(f, path, exIgnorePatterns))
-            .Select(f => LanguageDetector.Detect(f))
-            .Where(lang => lang.Length > 0)
-            .Distinct()
-            .OrderBy(lang => lang)
-            .ToList();
-    }
-
-    reporter.ReportDetectedLanguages(detectedLanguages);
-
-    var requiredTools = detectedLanguages
-        .SelectMany(lang => procurement.GetRequiredToolsForLanguage(lang))
-        .Distinct()
-        .OrderBy(t => t)
-        .ToList();
-
-    if (requiredTools.Count == 0)
-        requiredTools = ["cloc", "git"];
-
-    foreach (var tool in requiredTools)
-    {
-        if (procurement.CheckTool(tool))
-            reporter.ReportToolAvailable(tool);
-        else
-        {
-            var instructions = procurement.GetInstallInstructions(tool, platform);
-            reporter.ReportToolMissing(tool, instructions);
-        }
-    }
-}
