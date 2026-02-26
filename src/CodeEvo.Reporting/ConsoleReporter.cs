@@ -6,6 +6,18 @@ namespace CodeEvo.Reporting;
 
 public class ConsoleReporter
 {
+    private static readonly Color[] CcColors =
+        [Color.Green, Color.GreenYellow, Color.Yellow, Color.Orange1, Color.OrangeRed1,
+         Color.Red, Color.Red1, Color.Red3, Color.DarkRed, Color.Maroon];
+
+    private static readonly Color[] SmellColors =
+        [Color.Red, Color.Red1, Color.OrangeRed1, Color.Orange1, Color.Yellow,
+         Color.Yellow1, Color.Gold1, Color.DarkOrange, Color.DarkRed, Color.Maroon];
+
+    private static readonly Color[] TrendColors =
+        [Color.Magenta1, Color.MediumOrchid, Color.MediumOrchid1, Color.Purple,
+         Color.BlueViolet, Color.DarkMagenta, Color.DeepPink1, Color.DeepPink3, Color.HotPink, Color.Plum1];
+
     public void ReportCommit(CommitInfo commit, RepoMetrics repoMetrics)
     {
         AnsiConsole.MarkupLine($"[bold cyan]Commit:[/] [yellow]{commit.Hash[..Math.Min(8, commit.Hash.Length)]}[/]  " +
@@ -106,11 +118,12 @@ public class ConsoleReporter
             .Label(label)
             .CenterLabel();
 
-        foreach (var f in top)
+        for (int i = 0; i < top.Count; i++)
         {
+            var f = top[i];
             var barLabel = Path.GetFileName(f.Path);
             double value = hasCc ? Math.Round(f.CyclomaticComplexity, 1) : f.Sloc;
-            chart.AddItem(barLabel, value, Color.Yellow);
+            chart.AddItem(barLabel, value, CcColors[i % CcColors.Length]);
         }
 
         AnsiConsole.WriteLine();
@@ -133,8 +146,8 @@ public class ConsoleReporter
             .Label("[bold]Top files by Code Smells (weighted H×3 + M×2 + L×1)[/]")
             .CenterLabel();
 
-        foreach (var f in top)
-            chart.AddItem(Path.GetFileName(f.Path), WeightedSmells(f), Color.Red);
+        for (int i = 0; i < top.Count; i++)
+            chart.AddItem(Path.GetFileName(top[i].Path), WeightedSmells(top[i]), SmellColors[i % SmellColors.Length]);
 
         AnsiConsole.WriteLine();
         AnsiConsole.Write(chart);
@@ -161,10 +174,11 @@ public class ConsoleReporter
             .Label("[bold]Entropy score per commit[/]")
             .CenterLabel();
 
-        foreach (var m in metrics)
+        for (int i = 0; i < metrics.Count; i++)
         {
+            var m = metrics[i];
             var label = m.CommitHash[..Math.Min(7, m.CommitHash.Length)];
-            chart.AddItem(label, Math.Round(m.EntropyScore, 4), Color.Magenta1);
+            chart.AddItem(label, Math.Round(m.EntropyScore, 4), TrendColors[i % TrendColors.Length]);
         }
 
         AnsiConsole.WriteLine();
