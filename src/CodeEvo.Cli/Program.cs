@@ -54,6 +54,7 @@ scanHereCommand.SetHandler((string path, string? include) =>
     reporter.ReportFileMetrics(display);
     var entropy = EntropyCalculator.ComputeEntropy(display);
     reporter.ReportScanChart(display);
+    reporter.ReportSmellsChart(display);
     reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), entropy);
 }, scanHerePathArg, scanHereIncludeOption);
 

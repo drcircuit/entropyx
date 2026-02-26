@@ -117,6 +117,32 @@ public class ConsoleReporter
         AnsiConsole.Write(chart);
     }
 
+    public void ReportSmellsChart(IReadOnlyList<FileMetrics> files, int topN = 10)
+    {
+        var top = files
+            .Where(f => f.SmellsHigh > 0 || f.SmellsMedium > 0 || f.SmellsLow > 0)
+            .OrderByDescending(WeightedSmells)
+            .Take(topN)
+            .ToList();
+
+        if (top.Count == 0)
+            return;
+
+        var chart = new BarChart()
+            .Width(80)
+            .Label("[bold]Top files by Code Smells (weighted H×3 + M×2 + L×1)[/]")
+            .CenterLabel();
+
+        foreach (var f in top)
+            chart.AddItem(Path.GetFileName(f.Path), WeightedSmells(f), Color.Red);
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(chart);
+    }
+
+    private static int WeightedSmells(FileMetrics f) =>
+        f.SmellsHigh * 3 + f.SmellsMedium * 2 + f.SmellsLow;
+
     public void ReportRepoMetrics(RepoMetrics repoMetrics)
     {
         AnsiConsole.MarkupLine($"[bold cyan]Commit:[/] [yellow]{repoMetrics.CommitHash[..Math.Min(8, repoMetrics.CommitHash.Length)]}[/]  " +
