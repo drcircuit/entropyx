@@ -17,4 +17,7 @@
     <ProjectReference Include="..\..\src\CodeEvo.Adapters\CodeEvo.Adapters.csproj" />
     <ProjectReference Include="..\..\src\CodeEvo.Reporting\CodeEvo.Reporting.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CodeEvo.Reporting\CodeEvo.Reporting.csproj" />
+  </ItemGroup>
 </Project>

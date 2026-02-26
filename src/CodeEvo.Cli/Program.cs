@@ -215,10 +215,53 @@ var toolsCommand = new Command("tools", "Check availability of external tools");
 toolsCommand.AddArgument(toolsPathArg);
 toolsCommand.SetHandler((string path) => CheckTools(path), toolsPathArg);
 
+// ── heatmap command ───────────────────────────────────────────────────────────
+var heatmapPathArg     = new Argument<string>("path", () => ".", "Directory to scan");
+var heatmapOutputOpt   = new Option<string?>("--output", () => null, "Save heatmap PNG to this file path");
+var heatmapIncludeOpt  = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
+var heatmapCommand     = new Command("heatmap", "Show a complexity heatmap for source files in a directory");
+heatmapCommand.AddArgument(heatmapPathArg);
+heatmapCommand.AddOption(heatmapOutputOpt);
+heatmapCommand.AddOption(heatmapIncludeOpt);
+heatmapCommand.SetHandler((string path, string? output, string? include) =>
+{
+    var includePatterns = ParsePatterns(include);
+    var pipeline  = new ScanPipeline(new LizardAnalyzer());
+    var reporter  = new ConsoleReporter();
+    IReadOnlyList<FileMetrics> files = [];
+    AnsiConsole.Status()
+        .Spinner(Spinner.Known.Dots)
+        .Start($"Scanning {path}...", _ => files = pipeline.ScanDirectory(path, includePatterns));
+
+    var display = (includePatterns is null
+        ? files.Where(f => f.Language.Length > 0).ToList()
+        : (IReadOnlyList<FileMetrics>)files);
+
+    if (display.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No source files found.[/]");
+        return;
+    }
+
+    double[] badness = EntropyCalculator.ComputeBadness(display);
+    reporter.ReportHeatmap(display, badness);
+    reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc));
+
+    if (output is not null)
+    {
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start($"Generating heatmap image → {output}...", _ =>
+                HeatmapImageGenerator.Generate(display, badness, output));
+        AnsiConsole.MarkupLine($"[green]Heatmap image saved:[/] {Markup.Escape(output)}");
+    }
+}, heatmapPathArg, heatmapOutputOpt, heatmapIncludeOpt);
+
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
 rootCommand.AddCommand(reportCommand);
 rootCommand.AddCommand(toolsCommand);
+rootCommand.AddCommand(heatmapCommand);
 
 return await rootCommand.InvokeAsync(args);
 

@@ -20,6 +20,7 @@ It walks your git history, collects per-file quality signals (SLOC, cyclomatic c
   - [scan chk](#scan-chk)
   - [report](#report)
   - [check tools](#check-tools)
+  - [heatmap](#heatmap)
 - [Metrics Reference](#metrics-reference)
 - [Entropy Formula](#entropy-formula)
 - [Supported Languages](#supported-languages)
@@ -240,6 +241,37 @@ Verify that external tools (`git`, `cloc`) are available and print platform-spec
 
 ```sh
 entropyx check tools
+```
+
+---
+
+### heatmap
+
+Scan a directory and render a **complexity heatmap** showing per-file hotspots.
+
+```sh
+entropyx heatmap [path] [--output <file.png>] [--include <patterns>]
+```
+
+| Argument / Option | Default | Description |
+|---|---|---|
+| `path` | `.` | Directory to scan |
+| `--output` | _(none)_ | Save the heatmap as a PNG image to this path |
+| `--include` | _(all recognised source files)_ | Comma-separated file patterns to include (e.g. `*.cs,*.ts`) |
+
+**Console output** – files are sorted hottest-first and each row shows a 10-block heat bar coloured on a traffic-light gradient (green → yellow → red) together with SLOC, cyclomatic complexity, coupling, and a raw badness score.
+
+**PNG image** (`--output`) – generates a PNG using an IR camera colour palette (black → indigo → blue → cyan → green → yellow → orange → red → white) with one row per file and a colour-scale legend at the bottom.
+
+```sh
+# Show heatmap in the console for the current directory
+entropyx heatmap .
+
+# Show heatmap and save an IR-palette PNG
+entropyx heatmap ./src --output hotspots.png
+
+# Restrict to C# and TypeScript files only
+entropyx heatmap . --include *.cs,*.ts --output hotspots.png
 ```
 
 ---
