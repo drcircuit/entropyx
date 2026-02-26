@@ -542,13 +542,14 @@ public class HtmlReporter
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
+        var chartHistory = BuildChartHistory(ordered);
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
         AppendHtmlHeader(sb, reportDate, string.IsNullOrWhiteSpace(repositoryName) ? "EntropyX Code Health Report" : $"{repositoryName} - EntropyX Code Health Report");
         AppendSummarySection(sb, latest, ordered.Count, reportDate, repositoryName);
         AppendGaugesSection(sb, latest, latestFiles, ordered);
-        AppendEntropyChart(sb, ordered);
-        AppendGrowthChart(sb, ordered);
+        AppendEntropyChart(sb, chartHistory);
+        AppendGrowthChart(sb, chartHistory);
         if (commitStats is { Count: > 0 })
             AppendCcSmellCharts(sb, commitStats);
         AppendHeatmapSection(sb, latestFiles, badness);
@@ -678,11 +679,10 @@ public class HtmlReporter
     private static void AppendEntropyChart(StringBuilder sb,
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> ordered)
     {
-        var chartData = Downsample(ordered, MaxChartPoints);
-        var labels = chartData
+        var labels = ordered
             .Select(h => JsonString(h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToArray();
-        var values = chartData
+        var values = ordered
             .Select(h => h.Metrics.EntropyScore.ToString("F6", CultureInfo.InvariantCulture))
             .ToArray();
 
@@ -712,7 +712,7 @@ public class HtmlReporter
                         borderColor: '#7c6af7',
                         backgroundColor: gradient,
                         borderWidth: 2,
-                        pointRadius: {{(chartData.Count > 100 ? 0 : 3)}},
+                         pointRadius: {{(ordered.Count > 100 ? 0 : 3)}},
                         pointHoverRadius: 5,
                         fill: true,
                         tension: 0.3
@@ -735,17 +735,16 @@ public class HtmlReporter
     private static void AppendGrowthChart(StringBuilder sb,
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> ordered)
     {
-        var chartData = Downsample(ordered, MaxChartPoints);
-        var labels = chartData
+        var labels = ordered
             .Select(h => JsonString(h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
             .ToArray();
-        var slocValues = chartData
+        var slocValues = ordered
             .Select(h => h.Metrics.TotalSloc.ToString(CultureInfo.InvariantCulture))
             .ToArray();
-        var fileValues = chartData
+        var fileValues = ordered
             .Select(h => h.Metrics.TotalFiles.ToString(CultureInfo.InvariantCulture))
             .ToArray();
-        var slocPerFileValues = chartData
+        var slocPerFileValues = ordered
             .Select(h => h.Metrics.TotalFiles > 0
                 ? ((double)h.Metrics.TotalSloc / h.Metrics.TotalFiles).ToString("F1", CultureInfo.InvariantCulture)
                 : "0")
@@ -784,7 +783,7 @@ public class HtmlReporter
                       type: 'line',
                       data: {
                         labels: [{{string.Join(",", labels)}}],
-                        datasets: [{ label: label, data: data, borderColor: color.replace('1)', '1)').replace('rgba', 'rgb'), backgroundColor: g, borderWidth: 2, pointRadius: {{(chartData.Count > 100 ? 0 : 3)}}, fill: true, tension: 0.3 }]
+                         datasets: [{ label: label, data: data, borderColor: color.replace('1)', '1)').replace('rgba', 'rgb'), backgroundColor: g, borderWidth: 2, pointRadius: {{(ordered.Count > 100 ? 0 : 3)}}, fill: true, tension: 0.3 }]
                       },
                       options: {
                         responsive: true, maintainAspectRatio: false,
@@ -1451,8 +1450,7 @@ public class HtmlReporter
         string? repositoryName = null)
     {
         Directory.CreateDirectory(outputDir);
-        var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
-        var sampled = Downsample(ordered, MaxChartPoints);
+        var sampled = BuildChartHistory(history);
 
         var entropyPts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1776,6 +1774,10 @@ public class HtmlReporter
             return "th";
         return (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
     }
+
+    private static IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> BuildChartHistory(
+        IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history) =>
+        Downsample(history.OrderBy(h => h.Commit.Timestamp).ToList(), MaxChartPoints);
 
     // Downsample a list to at most maxPoints entries using uniform stride selection,
     // always keeping the first and last entry so chart extremes are preserved.
