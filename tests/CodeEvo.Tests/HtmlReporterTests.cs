@@ -803,4 +803,96 @@ public class HtmlReporterTests
 
         Assert.DoesNotContain("Relative to this repo", html);
     }
+
+    // ── GenerateRefactorReport ────────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateRefactorReport_EmptyFiles_ReturnsValidHtml()
+    {
+        var reporter = new HtmlReporter();
+        var html = reporter.GenerateRefactorReport([], [], "overall");
+        Assert.Contains("<!DOCTYPE html>", html);
+        Assert.Contains("EntropyX Refactor Report", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_ContainsRefactorCandidatesSection()
+    {
+        var reporter = new HtmlReporter();
+        var files = new List<FileMetrics>
+        {
+            MakeFileMetrics("src/A.cs", sloc: 500, cc: 20.0, smellsHigh: 2),
+            MakeFileMetrics("src/B.cs", sloc: 50,  cc: 2.0),
+            MakeFileMetrics("src/C.cs", sloc: 200, cc: 10.0),
+        };
+        double[] scores = [0.9, 0.2, 0.6];
+
+        var html = reporter.GenerateRefactorReport(files, scores, "overall");
+
+        Assert.Contains("Refactor Candidates", html);
+        Assert.Contains("src/A.cs", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_ShowsFocusInHeader()
+    {
+        var reporter = new HtmlReporter();
+        var files = new List<FileMetrics> { MakeFileMetrics("a.cs", sloc: 100) };
+        double[] scores = [0.5];
+
+        var html = reporter.GenerateRefactorReport(files, scores, "sloc,cc");
+
+        Assert.Contains("sloc,cc", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_RespectsTopN()
+    {
+        var reporter = new HtmlReporter();
+        var files = Enumerable.Range(1, 15)
+            .Select(i => MakeFileMetrics($"src/File{i}.cs", sloc: i * 10))
+            .ToList();
+        var scores = Enumerable.Range(1, 15).Select(i => (double)i / 15.0).ToArray();
+
+        var html = reporter.GenerateRefactorReport(files, scores, "sloc", topN: 5);
+
+        // Only the top 5 files (highest scores = files 11–15) should appear
+        Assert.Contains("File15.cs", html);
+        Assert.DoesNotContain("File1.cs", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_ContainsChart()
+    {
+        var reporter = new HtmlReporter();
+        var files = new List<FileMetrics> { MakeFileMetrics("a.cs", sloc: 200, cc: 8.0) };
+        double[] scores = [0.7];
+
+        var html = reporter.GenerateRefactorReport(files, scores, "cc");
+
+        Assert.Contains("refactorChart", html);
+        Assert.Contains("chart.js", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_EscapesHtmlInFilePaths()
+    {
+        var reporter = new HtmlReporter();
+        var files = new List<FileMetrics>
+        {
+            new("hash", "src/<xss>.cs", "CSharp", 100, 5.0, 70.0, 0, 0, 0, 0, 0),
+        };
+        double[] scores = [0.5];
+
+        var html = reporter.GenerateRefactorReport(files, scores, "overall");
+
+        // The unescaped element name must not appear as a raw HTML tag in the table section
+        int tableStart = html.IndexOf("Refactor Candidates", StringComparison.Ordinal);
+        int chartStart = html.IndexOf("refactorChart", StringComparison.Ordinal);
+        Assert.True(tableStart >= 0, "Refactor Candidates section not found");
+        Assert.True(chartStart > tableStart, "refactorChart not found after table");
+        var tableSection = html[tableStart..chartStart];
+        Assert.DoesNotContain("<xss>", tableSection);
+        Assert.Contains("&lt;xss&gt;", tableSection);
+    }
 }

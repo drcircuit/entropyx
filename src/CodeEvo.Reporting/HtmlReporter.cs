@@ -41,6 +41,156 @@ public class HtmlReporter
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
 
     /// <summary>
+    /// Generates a standalone HTML refactor report showing the top <paramref name="topN"/> files
+    /// recommended for refactoring, ranked by the supplied per-file <paramref name="scores"/>.
+    /// </summary>
+    /// <param name="files">File metrics to rank.</param>
+    /// <param name="scores">Parallel per-file scores from <see cref="EntropyCalculator.ComputeRefactorScores"/>; higher = higher priority.</param>
+    /// <param name="focus">Metric(s) used for ranking (shown in the report header).</param>
+    /// <param name="topN">Maximum number of files to include in the report.</param>
+    public string GenerateRefactorReport(
+        IReadOnlyList<FileMetrics> files,
+        double[] scores,
+        string focus,
+        int topN = 10)
+    {
+        var ranked = files.Zip(scores)
+            .OrderByDescending(x => x.Second)
+            .Take(topN)
+            .ToList();
+
+        var sb = new StringBuilder();
+        var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+        AppendHtmlHeader(sb, reportDate);
+        AppendRefactorHeader(sb, focus, topN, reportDate);
+        AppendRefactorTable(sb, ranked);
+        AppendRefactorChart(sb, ranked, focus);
+        AppendHtmlFooter(sb);
+
+        return sb.ToString();
+    }
+
+    private static void AppendRefactorHeader(StringBuilder sb, string focus, int topN, string reportDate)
+    {
+        sb.AppendLine($$"""
+              <header>
+                <div>
+                  <h1>🔧 EntropyX Refactor Report</h1>
+                  <div class="subtitle">Top {{topN}} files by <strong style="color:var(--accent)">{{EscapeHtml(focus)}}</strong> &nbsp;·&nbsp; Generated {{reportDate}}</div>
+                </div>
+              </header>
+              <div class="container">
+            """);
+    }
+
+    private static void AppendRefactorTable(StringBuilder sb, List<(FileMetrics First, double Second)> ranked)
+    {
+        if (ranked.Count == 0)
+        {
+            sb.AppendLine("""<section><p class="empty-msg">No files found.</p></section>""");
+            return;
+        }
+
+        double maxScore = ranked.Max(x => x.Second);
+        if (maxScore == 0) maxScore = 1.0;
+
+        sb.AppendLine("""
+                <section>
+                  <div class="card">
+                    <h2>📋 Refactor Candidates</h2>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="text-align:right">#</th>
+                          <th>File</th>
+                          <th>Language</th>
+                          <th style="text-align:right">SLOC</th>
+                          <th style="text-align:right">CC</th>
+                          <th style="text-align:right">MI</th>
+                          <th style="text-align:right">Smells H/M/L</th>
+                          <th style="text-align:right">Coupling</th>
+                          <th style="text-align:right">Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+            """);
+
+        for (int i = 0; i < ranked.Count; i++)
+        {
+            var (file, score) = ranked[i];
+            float t = (float)(score / maxScore);
+            string color = HeatColorHtml(t);
+            string slocBadge = SlocBadge(file.Sloc);
+            string ccBadge = CcBadge(file.CyclomaticComplexity);
+            string smellBadge = SmellBadge(file.SmellsHigh, file.SmellsMedium, file.SmellsLow);
+            string couplingBadge = CouplingBadge(file.CouplingProxy);
+
+            sb.AppendLine($$"""
+                        <tr>
+                          <td style="text-align:right">{{i + 1}}</td>
+                          <td>{{EscapeHtml(file.Path)}}</td>
+                          <td>{{EscapeHtml(file.Language.Length > 0 ? file.Language : "—")}}</td>
+                          <td style="text-align:right">{{file.Sloc.ToString("N0", CultureInfo.InvariantCulture)}} {{slocBadge}}</td>
+                          <td style="text-align:right">{{file.CyclomaticComplexity.ToString("F1", CultureInfo.InvariantCulture)}} {{ccBadge}}</td>
+                          <td style="text-align:right">{{file.MaintainabilityIndex.ToString("F1", CultureInfo.InvariantCulture)}}</td>
+                          <td style="text-align:right">{{file.SmellsHigh}}/{{file.SmellsMedium}}/{{file.SmellsLow}} {{smellBadge}}</td>
+                          <td style="text-align:right">{{file.CouplingProxy.ToString("F0", CultureInfo.InvariantCulture)}} {{couplingBadge}}</td>
+                          <td style="text-align:right"><span style="color:{{color}}">{{score.ToString("F3", CultureInfo.InvariantCulture)}}</span></td>
+                        </tr>
+                """);
+        }
+
+        sb.AppendLine("      </tbody></table></div></section>");
+    }
+
+    private static void AppendRefactorChart(StringBuilder sb, List<(FileMetrics First, double Second)> ranked, string focus)
+    {
+        if (ranked.Count == 0) return;
+
+        var labels = string.Join(",", ranked.Select(x => JsonString(Path.GetFileName(x.First.Path))));
+        var values = string.Join(",", ranked.Select(x => x.Second.ToString("F4", CultureInfo.InvariantCulture)));
+
+        sb.AppendLine($$"""
+                <section>
+                  <div class="chart-card">
+                    <h2>📊 Refactor Priority Score — {{EscapeHtml(focus)}}</h2>
+                    <div class="chart-wrap" style="height:320px"><canvas id="refactorChart"></canvas></div>
+                  </div>
+                </section>
+                <script>
+                (function() {
+                  var ctx = document.getElementById('refactorChart').getContext('2d');
+                  new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                      labels: [{{labels}}],
+                      datasets: [{
+                        label: 'Refactor Score',
+                        data: [{{values}}],
+                        backgroundColor: 'rgba(239,68,68,0.6)',
+                        borderColor: '#ef4444',
+                        borderWidth: 1
+                      }]
+                    },
+                    options: {
+                      indexAxis: 'y',
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { labels: { color: '#888' } } },
+                      scales: {
+                        x: { ticks: { color: '#888' }, grid: { color: '#2d3044' }, beginAtZero: true },
+                        y: { ticks: { color: '#e0e0e0' }, grid: { color: '#2d3044' } }
+                      }
+                    }
+                  });
+                })();
+                </script>
+            """);
+    }
+
+
+    /// <summary>
     /// Generates a rich HTML drilldown report for a single commit showing per-language SLOC,
     /// per-file metrics, the commit's effect on the repo, notable events, and a health assessment.
     /// </summary>
