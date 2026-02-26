@@ -731,4 +731,76 @@ public class HtmlReporterTests
         Assert.Contains("Coupling", html);
         Assert.Contains("18", html);
     }
+
+    // ── Relative assessment ───────────────────────────────────────────────────
+
+    [Fact]
+    public void GenerateDrilldown_AssessmentUsesDriftLevelLabel()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("aaa");
+        var metrics = MakeRepoMetrics("aaa", 0.5);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("Drift Level", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_NoHistory_ShowsDriftFramingDisclaimer()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("aaa");
+        var metrics = MakeRepoMetrics("aaa", 0.5);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null);
+
+        Assert.Contains("drift over time", html);
+    }
+
+    [Fact]
+    public void GenerateDrilldown_WithEnoughHistory_ShowsRelativeContext()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("d");
+        var metrics = MakeRepoMetrics("d", 1.2);
+
+        // History with 4 snapshots; current score (1.2) is the 3rd out of 4 values
+        // sorted: [0.88, 1.00, 1.20, 1.54] → 1.2 is at 75th percentile (above historical average)
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 3), MakeRepoMetrics("a", 0.88)),
+            (MakeCommit("b", 2), MakeRepoMetrics("b", 1.00)),
+            (MakeCommit("c", 1), MakeRepoMetrics("c", 1.54)),
+            (MakeCommit("d", 0), MakeRepoMetrics("d", 1.20)),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], history, null);
+
+        // Relative context section must be present
+        Assert.Contains("Relative to this repo", html);
+        Assert.Contains("percentile", html);
+        // Historical range must be shown
+        Assert.Contains("0.8800", html); // min
+        Assert.Contains("1.5400", html); // max
+    }
+
+    [Fact]
+    public void GenerateDrilldown_WithInsufficientHistory_OmitsRelativeContext()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("b");
+        var metrics = MakeRepoMetrics("b", 1.0);
+
+        // Only 2 history snapshots — below the 3-snapshot threshold
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("a", 1), MakeRepoMetrics("a", 0.9)),
+            (MakeCommit("b", 0), MakeRepoMetrics("b", 1.0)),
+        };
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], history, null);
+
+        Assert.DoesNotContain("Relative to this repo", html);
+    }
 }

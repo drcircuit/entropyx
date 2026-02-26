@@ -3,6 +3,9 @@
 **EntropyX** is a cross-platform CLI tool that measures how disordered your codebase is over time.  
 It walks your git history, collects per-file quality signals (SLOC, cyclomatic complexity, code smells, coupling, and maintainability), and rolls them into a single **entropy score** per commit—higher means more complexity spread unevenly across more files.
 
+> **EntropyX is a temperature gauge, not a GPA.**  
+> The entropy score measures *structural drift over time* — how complexity is spreading across a codebase as it grows and evolves. A rising score in a growing repository is expected and does not automatically mean the code needs refactoring. Use the *trend* and *relative-to-history* context to understand whether drift is accelerating, stabilising, or improving.
+
 ---
 
 ## Table of Contents
@@ -233,6 +236,7 @@ The HTML report includes:
 - **Troubled commits** – commits that caused a statistically significant entropy _increase_
 - **Heroic commits** – commits that caused a statistically significant entropy _decrease_
 - **Full commit table** – all commits with their entropy score and delta, color-coded green/red
+- **Relative assessment** – when 3 or more snapshots are stored, the assessment shows the current score as a percentile of the repository's own recorded history, so drift is judged against the repo's evolution rather than an absolute scale
 
 ---
 
@@ -308,6 +312,10 @@ The entropy score for a commit is computed as follows:
 8. **Clamp** at 0.
 
 A **high score** means complexity and problems are both large in magnitude *and* spread evenly across many files — the worst possible state for maintainability.
+
+> **Interpreting the score:** EntropyX is designed to be read as a *longitudinal signal*, not an absolute grade.  
+> A score of 1.2 in a repository that previously peaked at 1.8 and is now stable represents controlled growth, not crisis.  
+> Reports show your current score at its **historical percentile** (relative to all stored snapshots) so you can judge drift in context.
 
 ---
 
