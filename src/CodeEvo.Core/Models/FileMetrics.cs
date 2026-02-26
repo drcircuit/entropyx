@@ -11,4 +11,5 @@ public record FileMetrics(
     int SmellsMedium,
     int SmellsLow,
     double CouplingProxy,
-    double MaintainabilityProxy);
+    double MaintainabilityProxy,
+    CodeKind Kind = CodeKind.Production);

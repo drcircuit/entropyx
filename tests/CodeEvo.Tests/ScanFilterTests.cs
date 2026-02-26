@@ -175,4 +175,67 @@ public class ScanFilterTests
         var root = "/repo";
         Assert.True(ScanFilter.IsExIgnored("src/generated/Foo.cs", root, ["generated"]));
     }
+
+    // ── LoadUtilityPatterns ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void LoadUtilityPatterns_MissingFile_ReturnsEmpty()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        try { Assert.Empty(ScanFilter.LoadUtilityPatterns(dir)); }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void LoadUtilityPatterns_ReadsPatterns_SkipsCommentsAndBlankLines()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllLines(Path.Combine(dir, ".utilityfiles"), [
+                "# build scripts",
+                "*.sh",
+                "",
+                "scripts",
+                "  # another comment  ",
+                "*.ps1",
+            ]);
+            var patterns = ScanFilter.LoadUtilityPatterns(dir);
+            Assert.Equal(new string[] { "*.sh", "scripts", "*.ps1" }, patterns);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // ── ClassifyCodeKind ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ClassifyCodeKind_EmptyPatterns_ReturnsProduction()
+    {
+        var root = Path.GetTempPath();
+        var kind = ScanFilter.ClassifyCodeKind("src/Foo.cs", root, []);
+        Assert.Equal(CodeEvo.Core.Models.CodeKind.Production, kind);
+    }
+
+    [Theory]
+    [InlineData("scripts/deploy.sh", "*.sh")]
+    [InlineData("tools/build.py", "tools")]
+    [InlineData("scripts/ci.ps1", "scripts")]
+    public void ClassifyCodeKind_MatchingUtilityPattern_ReturnsUtility(string relPath, string pattern)
+    {
+        var root = Path.GetTempPath();
+        var kind = ScanFilter.ClassifyCodeKind(relPath, root, [pattern]);
+        Assert.Equal(CodeEvo.Core.Models.CodeKind.Utility, kind);
+    }
+
+    [Theory]
+    [InlineData("src/Foo.cs", "*.sh")]
+    [InlineData("src/Bar.py", "tools")]
+    public void ClassifyCodeKind_NonMatchingPattern_ReturnsProduction(string relPath, string pattern)
+    {
+        var root = Path.GetTempPath();
+        var kind = ScanFilter.ClassifyCodeKind(relPath, root, [pattern]);
+        Assert.Equal(CodeEvo.Core.Models.CodeKind.Production, kind);
+    }
 }

@@ -16,6 +16,7 @@ public class ScanPipeline
     public (IReadOnlyList<FileMetrics> Files, RepoMetrics Repo) ScanCommit(CommitInfo commit, string repoPath)
     {
         var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(repoPath);
+        var utilityPatterns  = ScanFilter.LoadUtilityPatterns(repoPath);
         var allFiles = _git.GetAllFilesAtCommit(repoPath, commit.Hash)
             .Where(f => !ScanFilter.IsExIgnored(f, repoPath, exIgnorePatterns))
             .ToList();
@@ -56,6 +57,7 @@ public class ScanPipeline
                 lizardResults.TryGetValue(filePath, out var lizard);
                 var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
                 var mi = ComputeMaintainabilityIndex(sloc, avgCc);
+                var kind = ScanFilter.ClassifyCodeKind(filePath, repoPath, utilityPatterns);
 
                 fileMetrics.Add(new FileMetrics(
                     CommitHash: commit.Hash,
@@ -68,7 +70,8 @@ public class ScanPipeline
                     SmellsMedium: lizard?.SmellsMedium ?? 0,
                     SmellsLow: lizard?.SmellsLow ?? 0,
                     CouplingProxy: 0,
-                    MaintainabilityProxy: 0));
+                    MaintainabilityProxy: 0,
+                    Kind: kind));
             }
         }
         finally
@@ -114,6 +117,7 @@ public class ScanPipeline
     public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath, string[]? includePatterns = null)
     {
         var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(dirPath);
+        var utilityPatterns  = ScanFilter.LoadUtilityPatterns(dirPath);
         var lizardResults = _lizard?.AnalyzeDirectory(dirPath)
             ?? new Dictionary<string, LizardFileResult>();
 
@@ -139,6 +143,7 @@ public class ScanPipeline
                 lizardResults.TryGetValue(relativePath, out var lizard);
                 var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
                 var mi = ComputeMaintainabilityIndex(sloc, avgCc);
+                var kind = ScanFilter.ClassifyCodeKind(relativePath, dirPath, utilityPatterns);
                 return new FileMetrics(
                     CommitHash: string.Empty,
                     Path: relativePath,
@@ -150,7 +155,8 @@ public class ScanPipeline
                     SmellsMedium: lizard?.SmellsMedium ?? 0,
                     SmellsLow: lizard?.SmellsLow ?? 0,
                     CouplingProxy: 0,
-                    MaintainabilityProxy: 0);
+                    MaintainabilityProxy: 0,
+                    Kind: kind);
             })
             .Where(f => f is not null)
             .Select(f => f!)

@@ -13,9 +13,9 @@ public class FileMetricsRepository(DatabaseContext context)
         cmd.CommandText = """
             INSERT INTO FileMetrics
                 (CommitHash, Path, Language, Sloc, CyclomaticComplexity, MaintainabilityIndex,
-                 SmellsHigh, SmellsMedium, SmellsLow, CouplingProxy, MaintainabilityProxy)
+                 SmellsHigh, SmellsMedium, SmellsLow, CouplingProxy, MaintainabilityProxy, Kind)
             VALUES
-                (@commitHash, @path, @lang, @sloc, @cc, @mi, @sh, @sm, @sl, @cp, @mp)
+                (@commitHash, @path, @lang, @sloc, @cc, @mi, @sh, @sm, @sl, @cp, @mp, @kind)
             """;
         cmd.Parameters.AddWithValue("@commitHash", metrics.CommitHash);
         cmd.Parameters.AddWithValue("@path", metrics.Path);
@@ -28,6 +28,7 @@ public class FileMetricsRepository(DatabaseContext context)
         cmd.Parameters.AddWithValue("@sl", metrics.SmellsLow);
         cmd.Parameters.AddWithValue("@cp", metrics.CouplingProxy);
         cmd.Parameters.AddWithValue("@mp", metrics.MaintainabilityProxy);
+        cmd.Parameters.AddWithValue("@kind", metrics.Kind.ToString());
         cmd.ExecuteNonQuery();
     }
 
@@ -50,18 +51,24 @@ public class FileMetricsRepository(DatabaseContext context)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT CommitHash, Path, Language, Sloc, CyclomaticComplexity, MaintainabilityIndex,
-                   SmellsHigh, SmellsMedium, SmellsLow, CouplingProxy, MaintainabilityProxy
+                   SmellsHigh, SmellsMedium, SmellsLow, CouplingProxy, MaintainabilityProxy, Kind
             FROM FileMetrics WHERE CommitHash = @commitHash
             """;
         cmd.Parameters.AddWithValue("@commitHash", commitHash);
         var results = new List<FileMetrics>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
+        {
+            var kindOrdinal = reader.GetOrdinal("Kind");
+            var kindStr = reader.IsDBNull(kindOrdinal) ? "Production" : reader.GetString(kindOrdinal);
+            var kind = Enum.TryParse<CodeEvo.Core.Models.CodeKind>(kindStr, out var k)
+                ? k : CodeEvo.Core.Models.CodeKind.Production;
             results.Add(new FileMetrics(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2),
                 reader.GetInt32(3), reader.GetDouble(4), reader.GetDouble(5),
                 reader.GetInt32(6), reader.GetInt32(7), reader.GetInt32(8),
-                reader.GetDouble(9), reader.GetDouble(10)));
+                reader.GetDouble(9), reader.GetDouble(10), kind));
+        }
         return results;
     }
 }

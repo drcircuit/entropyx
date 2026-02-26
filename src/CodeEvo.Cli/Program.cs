@@ -33,15 +33,17 @@ scanLangCommand.SetHandler((string path, string? include) =>
     reporter.ReportLanguageScan(files);
 }, scanLangPathArg, scanLangIncludeOption);
 
-// scan here [path] [--include <patterns>] [--save <output.json>]
+// scan here [path] [--include <patterns>] [--save <output.json>] [--kind all|production|utility]
 var scanHerePathArg = new Argument<string>("path", () => ".", "Directory to scan (no git required)");
 var scanHereIncludeOption = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
 var scanHereSaveOption = new Option<string?>("--save", () => null, "Save a snapshot data.json to this file path (for later comparison)");
+var scanHereKindOption = new Option<string>("--kind", () => "all", "Filter metrics by code kind: all, production, utility");
 var scanHereCommand = new Command("here", "Scan current directory without git");
 scanHereCommand.AddArgument(scanHerePathArg);
 scanHereCommand.AddOption(scanHereIncludeOption);
 scanHereCommand.AddOption(scanHereSaveOption);
-scanHereCommand.SetHandler((string path, string? include, string? savePath) =>
+scanHereCommand.AddOption(scanHereKindOption);
+scanHereCommand.SetHandler((string path, string? include, string? savePath, string kind) =>
 {
     var includePatterns = ParsePatterns(include);
     var pipeline = new ScanPipeline(new LizardAnalyzer());
@@ -54,6 +56,7 @@ scanHereCommand.SetHandler((string path, string? include, string? savePath) =>
     var display = includePatterns is null
         ? files.Where(f => f.Language.Length > 0).ToList()
         : (IReadOnlyList<FileMetrics>)files;
+    display = FilterByKind(display, kind);
     reporter.ReportFileMetrics(display);
     var entropy = EntropyCalculator.ComputeEntropy(display);
     reporter.ReportScanChart(display);
@@ -66,7 +69,7 @@ scanHereCommand.SetHandler((string path, string? include, string? savePath) =>
         File.WriteAllText(savePath, json);
         AnsiConsole.MarkupLine($"[green]✓[/] Snapshot saved to [cyan]{Markup.Escape(savePath)}[/]");
     }
-}, scanHerePathArg, scanHereIncludeOption, scanHereSaveOption);
+}, scanHerePathArg, scanHereIncludeOption, scanHereSaveOption, scanHereKindOption);
 
 // scan head [repoPath] [--db]
 var scanHeadRepoArg = new Argument<string>("repoPath", () => ".", "Path to the git repository");
@@ -220,14 +223,16 @@ var reportRepoArg = new Argument<string>("repoPath", "Path to the git repository
 var reportDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
 var reportCommitOption = new Option<string?>("--commit", () => null, "Show metrics for a specific commit hash");
 var reportHtmlOption = new Option<string?>("--html", () => null, "Write a rich HTML report to this file");
+var reportKindOption = new Option<string>("--kind", () => "all", "Filter metrics by code kind: all, production, utility");
 
 var reportCommand = new Command("report", "Show metrics report");
 reportCommand.AddArgument(reportRepoArg);
 reportCommand.AddOption(reportDbOption);
 reportCommand.AddOption(reportCommitOption);
 reportCommand.AddOption(reportHtmlOption);
+reportCommand.AddOption(reportKindOption);
 
-reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHash, string? htmlPath) =>
+reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHash, string? htmlPath, string kind) =>
 {
     var reporter = new ConsoleReporter();
     var db = new DatabaseContext();
@@ -282,10 +287,26 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
                         .ToList();
                 }
 
-                // Get file metrics for the latest (most recent) commit
+                // Get file metrics for the latest (most recent) commit, filtered by kind
                 IReadOnlyList<FileMetrics> latestFiles = [];
                 if (history.Count > 0)
-                    latestFiles = fileMetricsRepo.GetByCommit(history[^1].Item1.Hash);
+                    latestFiles = FilterByKind(fileMetricsRepo.GetByCommit(history[^1].Item1.Hash), kind);
+
+                // When --kind is specified, rebuild per-commit entropy from stored file metrics
+                if (!string.Equals(kind, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    history = history.Select(h =>
+                    {
+                        var commitFiles = FilterByKind(fileMetricsRepo.GetByCommit(h.Item1.Hash), kind);
+                        var kindEntropy = EntropyCalculator.ComputeEntropy(commitFiles);
+                        var kindMetrics = new RepoMetrics(
+                            h.Item2.CommitHash,
+                            commitFiles.Count,
+                            commitFiles.Sum(f => f.Sloc),
+                            kindEntropy);
+                        return (h.Item1, kindMetrics);
+                    }).ToList();
+                }
 
                 var htmlReporter = new HtmlReporter();
                 var html = htmlReporter.Generate(history, latestFiles);
@@ -303,7 +324,7 @@ reportCommand.SetHandler(async (string repoPath, string dbPath, string? commitHa
     }
 
     await Task.CompletedTask;
-}, reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption);
+}, reportRepoArg, reportDbOption, reportCommitOption, reportHtmlOption, reportKindOption);
 
 // ── tools subcommand (kept for backward compatibility) ────────────────────────
 var toolsPathArg = new Argument<string>("path", () => ".", "Directory to scan for language detection");
@@ -486,6 +507,15 @@ return await rootCommand.InvokeAsync(args);
 // ── helpers ───────────────────────────────────────────────────────────────────
 static string[]? ParsePatterns(string? input) =>
     input?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+/// <summary>Filters a list of file metrics by the given kind string (all/production/utility).</summary>
+static IReadOnlyList<FileMetrics> FilterByKind(IReadOnlyList<FileMetrics> files, string kind) =>
+    kind.ToLowerInvariant() switch
+    {
+        "production" => files.Where(f => f.Kind == CodeKind.Production).ToList(),
+        "utility"    => files.Where(f => f.Kind == CodeKind.Utility).ToList(),
+        _            => files  // "all" or unrecognised → no filtering
+    };
 
 static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRepository, ScanPipeline, GitTraversal, DatabaseContext)
     BuildScanDeps(string dbPath)
