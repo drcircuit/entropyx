@@ -1,3 +1,4 @@
+using CodeEvo.Core;
 using CodeEvo.Core.Models;
 using Spectre.Console;
 
@@ -76,8 +77,71 @@ public class ConsoleReporter
         AnsiConsole.Write(table);
     }
 
-    public void ReportScanSummary(int fileCount, int totalSloc)
+    public void ReportScanSummary(int fileCount, int totalSloc, double entropy)
     {
-        AnsiConsole.MarkupLine($"\n[bold]Total files:[/] [green]{fileCount}[/]  [bold]Total SLOC:[/] [green]{totalSloc}[/]");
+        AnsiConsole.MarkupLine($"\n[bold]Total files:[/] [green]{fileCount}[/]  [bold]Total SLOC:[/] [green]{totalSloc}[/]  [bold]Entropy:[/] [magenta]{entropy:F4}[/]");
+    }
+
+    public void ReportScanChart(IReadOnlyList<FileMetrics> files, int topN = 10)
+    {
+        bool hasCc = files.Any(f => f.CyclomaticComplexity > 0);
+
+        var top = hasCc
+            ? files.Where(f => f.CyclomaticComplexity > 0)
+                   .OrderByDescending(f => f.CyclomaticComplexity)
+                   .Take(topN)
+                   .ToList()
+            : files.Where(f => f.Sloc > 0)
+                   .OrderByDescending(f => f.Sloc)
+                   .Take(topN)
+                   .ToList();
+
+        if (top.Count == 0)
+            return;
+
+        string label = hasCc ? "[bold]Top files by Cyclomatic Complexity[/]" : "[bold]Top files by SLOC[/]";
+
+        var chart = new BarChart()
+            .Width(80)
+            .Label(label)
+            .CenterLabel();
+
+        foreach (var f in top)
+        {
+            var barLabel = Path.GetFileName(f.Path);
+            double value = hasCc ? Math.Round(f.CyclomaticComplexity, 1) : f.Sloc;
+            chart.AddItem(barLabel, value, Color.Yellow);
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(chart);
+    }
+
+    public void ReportRepoMetrics(RepoMetrics repoMetrics)
+    {
+        AnsiConsole.MarkupLine($"[bold cyan]Commit:[/] [yellow]{repoMetrics.CommitHash[..Math.Min(8, repoMetrics.CommitHash.Length)]}[/]  " +
+                               $"Files: [green]{repoMetrics.TotalFiles}[/]  " +
+                               $"SLOC: [green]{repoMetrics.TotalSloc}[/]  " +
+                               $"Entropy: [magenta]{repoMetrics.EntropyScore:F4}[/]");
+    }
+
+    public void ReportEntropyTrend(IReadOnlyList<RepoMetrics> metrics)
+    {
+        if (metrics.Count == 0)
+            return;
+
+        var chart = new BarChart()
+            .Width(80)
+            .Label("[bold]Entropy score per commit[/]")
+            .CenterLabel();
+
+        foreach (var m in metrics)
+        {
+            var label = m.CommitHash[..Math.Min(7, m.CommitHash.Length)];
+            chart.AddItem(label, Math.Round(m.EntropyScore, 4), Color.Magenta1);
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(chart);
     }
 }
