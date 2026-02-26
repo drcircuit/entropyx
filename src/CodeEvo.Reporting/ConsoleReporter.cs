@@ -460,6 +460,58 @@ public class ConsoleReporter
         return new string('█', filled) + new string('░', 10 - filled);
     }
 
+    /// <summary>
+    /// Renders a ranked list of the top files recommended for refactoring based on
+    /// the supplied per-file scores.  The <paramref name="focus"/> string is shown
+    /// in the heading so the user can see which metric(s) drove the ranking.
+    /// </summary>
+    public void ReportRefactorList(IReadOnlyList<FileMetrics> files, double[] scores, string focus, int topN = 10)
+    {
+        var top = files.Zip(scores)
+            .OrderByDescending(x => x.Second)
+            .Take(topN)
+            .ToList();
+
+        if (top.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No files to recommend for refactoring.[/]");
+            return;
+        }
+
+        AnsiConsole.MarkupLine($"\n[bold]Top {top.Count} Refactor Candidates[/] [grey](focus: [cyan]{Markup.Escape(focus)}[/])[/]");
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn(new TableColumn("#").RightAligned());
+        table.AddColumn("File");
+        table.AddColumn(new TableColumn("SLOC").RightAligned());
+        table.AddColumn(new TableColumn("CC").RightAligned());
+        table.AddColumn(new TableColumn("MI").RightAligned());
+        table.AddColumn(new TableColumn("Smells H/M/L").RightAligned());
+        table.AddColumn(new TableColumn("Coupling").RightAligned());
+        table.AddColumn(new TableColumn("Score").RightAligned());
+
+        double maxScore = top.Count > 0 ? top.Max(x => x.Second) : 1.0;
+        if (maxScore == 0) maxScore = 1.0;
+
+        for (int i = 0; i < top.Count; i++)
+        {
+            var (file, score) = top[i];
+            double normalized = score / maxScore;
+            string colorHex = TrafficLightHex(normalized);
+            table.AddRow(
+                (i + 1).ToString(),
+                Markup.Escape(file.Path),
+                file.Sloc.ToString(),
+                file.CyclomaticComplexity.ToString("F1"),
+                file.MaintainabilityIndex.ToString("F1"),
+                $"{file.SmellsHigh}/{file.SmellsMedium}/{file.SmellsLow}",
+                file.CouplingProxy.ToString("F1"),
+                $"[{colorHex}]{score:F3}[/]");
+        }
+
+        AnsiConsole.Write(table);
+    }
+
     /// <summary>Returns the correct English ordinal suffix (st/nd/rd/th) for a percentile value.</summary>
     private static string OrdinalSuffix(double value)
     {

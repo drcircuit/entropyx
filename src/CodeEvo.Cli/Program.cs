@@ -375,6 +375,57 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
     }
 }, heatmapPathArg, heatmapOutputOpt, heatmapIncludeOpt);
 
+// ── refactor command ──────────────────────────────────────────────────────────
+var refactorPathArg    = new Argument<string>("path", () => ".", "Directory to scan");
+var refactorFocusOpt   = new Option<string>("--focus", () => "overall",
+    "Metric(s) to rank by: overall, sloc, cc, mi, smells, coupling, or comma-separated combinations");
+var refactorTopOpt     = new Option<int>("--top", () => 10, "Number of files to list (default 10)");
+var refactorHtmlOpt    = new Option<string?>("--html", () => null, "Write a rich HTML refactor report to this file");
+var refactorIncludeOpt = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
+
+var refactorCommand = new Command("refactor", "Show top files recommended for refactoring based on metrics");
+refactorCommand.AddArgument(refactorPathArg);
+refactorCommand.AddOption(refactorFocusOpt);
+refactorCommand.AddOption(refactorTopOpt);
+refactorCommand.AddOption(refactorHtmlOpt);
+refactorCommand.AddOption(refactorIncludeOpt);
+refactorCommand.SetHandler((string path, string focus, int top, string? htmlPath, string? include) =>
+{
+    var includePatterns = ParsePatterns(include);
+    var pipeline  = new ScanPipeline(new LizardAnalyzer());
+    var reporter  = new ConsoleReporter();
+    IReadOnlyList<FileMetrics> files = [];
+    AnsiConsole.Status()
+        .Spinner(Spinner.Known.Dots)
+        .Start($"Scanning {path}...", _ => files = pipeline.ScanDirectory(path, includePatterns));
+
+    var display = (includePatterns is null
+        ? files.Where(f => f.Language.Length > 0).ToList()
+        : (IReadOnlyList<FileMetrics>)files);
+
+    if (display.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No source files found.[/]");
+        return;
+    }
+
+    double[] scores = EntropyCalculator.ComputeRefactorScores(display, focus);
+    reporter.ReportRefactorList(display, scores, focus, top);
+
+    if (htmlPath is not null)
+    {
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start($"Generating HTML refactor report → {htmlPath}...", _ =>
+            {
+                var htmlReporter = new HtmlReporter();
+                var html = htmlReporter.GenerateRefactorReport(display, scores, focus, top);
+                File.WriteAllText(htmlPath, html);
+            });
+        AnsiConsole.MarkupLine($"[green]✓[/] HTML refactor report written to [cyan]{Markup.Escape(htmlPath)}[/]");
+    }
+}, refactorPathArg, refactorFocusOpt, refactorTopOpt, refactorHtmlOpt, refactorIncludeOpt);
+
 // ── compare command ───────────────────────────────────────────────────────────
 var compareBaselineArg = new Argument<string>("baseline", "Path to the baseline data.json file");
 var compareCurrentArg  = new Argument<string>("current",  "Path to the current data.json file");
@@ -498,6 +549,7 @@ rootCommand.AddCommand(checkCommand);
 rootCommand.AddCommand(reportCommand);
 rootCommand.AddCommand(toolsCommand);
 rootCommand.AddCommand(heatmapCommand);
+rootCommand.AddCommand(refactorCommand);
 rootCommand.AddCommand(compareCommand);
 rootCommand.AddCommand(dbCommand);
 rootCommand.AddCommand(clearCommand);

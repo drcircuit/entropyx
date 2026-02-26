@@ -176,4 +176,150 @@ public class EntropyCalculatorTests
         Assert.Equal(EntropyCalculator.WM, result[0], precision: 10);
         Assert.Equal(EntropyCalculator.WM, result[1], precision: 10);
     }
+
+    // ── ComputeRefactorScores ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeRefactorScores_EmptyList_ReturnsEmptyArray()
+    {
+        var result = EntropyCalculator.ComputeRefactorScores(Array.Empty<FileMetrics>());
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_Overall_SameAsBadness()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", cc: 10, sloc: 200),
+            MakeFile("b.cs", cc: 2,  sloc: 50),
+        };
+        var badness = EntropyCalculator.ComputeBadness(files);
+        var scores  = EntropyCalculator.ComputeRefactorScores(files, "overall");
+        Assert.Equal(badness.Length, scores.Length);
+        for (int i = 0; i < badness.Length; i++)
+            Assert.Equal(badness[i], scores[i], precision: 10);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_DefaultFocus_SameAsBadness()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", cc: 10),
+            MakeFile("b.cs", cc: 2),
+        };
+        var badness = EntropyCalculator.ComputeBadness(files);
+        var scores  = EntropyCalculator.ComputeRefactorScores(files);
+        for (int i = 0; i < badness.Length; i++)
+            Assert.Equal(badness[i], scores[i], precision: 10);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_FocusSloc_RanksBySloc()
+    {
+        // File a has more SLOC → higher score
+        var files = new[]
+        {
+            MakeFile("a.cs", sloc: 1000),
+            MakeFile("b.cs", sloc: 10),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "sloc");
+        Assert.Equal(2, scores.Length);
+        Assert.True(scores[0] > scores[1], "Higher SLOC file should have a higher refactor score.");
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_FocusCc_RanksByCc()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", cc: 30),
+            MakeFile("b.cs", cc: 2),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "cc");
+        Assert.True(scores[0] > scores[1]);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_FocusMi_HigherScoreForLowerMi()
+    {
+        // Low MI = bad maintainability → should get higher refactor score
+        var files = new[]
+        {
+            MakeFile("a.cs", mi: 20),  // low MI – needs attention
+            MakeFile("b.cs", mi: 90),  // high MI – healthy
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "mi");
+        Assert.True(scores[0] > scores[1]);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_FocusSmells_RanksBySmells()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", smellsHigh: 3, smellsMed: 2),
+            MakeFile("b.cs"),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "smells");
+        Assert.True(scores[0] > scores[1]);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_FocusCoupling_RanksByCoupling()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", coupling: 25),
+            MakeFile("b.cs", coupling: 1),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "coupling");
+        Assert.True(scores[0] > scores[1]);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_CombinedFocus_AveragesNormalizedMetrics()
+    {
+        // Both sloc and cc maximums belong to file a → file a gets highest score
+        var files = new[]
+        {
+            MakeFile("a.cs", sloc: 500, cc: 20),
+            MakeFile("b.cs", sloc: 10,  cc: 1),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "sloc,cc");
+        Assert.Equal(2, scores.Length);
+        Assert.True(scores[0] > scores[1]);
+        // Max file scores 1.0 for sloc and 1.0 for cc → average = 1.0
+        Assert.Equal(1.0, scores[0], precision: 10);
+        // Min file scores 0.0 for both → average = 0.0
+        Assert.Equal(0.0, scores[1], precision: 10);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_UnrecognisedFocus_FallsBackToOverall()
+    {
+        var files = new[]
+        {
+            MakeFile("a.cs", cc: 10),
+            MakeFile("b.cs", cc: 2),
+        };
+        var overall = EntropyCalculator.ComputeRefactorScores(files, "overall");
+        var unknown = EntropyCalculator.ComputeRefactorScores(files, "unknown_metric");
+        for (int i = 0; i < overall.Length; i++)
+            Assert.Equal(overall[i], unknown[i], precision: 10);
+    }
+
+    [Fact]
+    public void ComputeRefactorScores_EqualMetricValues_AllScoresAreZero()
+    {
+        // When all files have the same SLOC the normalized range is 0 → all scores = 0
+        var files = new[]
+        {
+            MakeFile("a.cs", sloc: 100),
+            MakeFile("b.cs", sloc: 100),
+        };
+        var scores = EntropyCalculator.ComputeRefactorScores(files, "sloc");
+        Assert.All(scores, s => Assert.Equal(0.0, s, precision: 10));
+    }
 }

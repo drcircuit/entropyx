@@ -92,6 +92,57 @@ public static class EntropyCalculator
         return result;
     }
 
+    /// <summary>
+    /// Computes per-file refactor priority scores based on the specified focus metrics.
+    /// <paramref name="focus"/> may be <c>"overall"</c> (default, uses the full badness formula) or
+    /// any comma-separated combination of <c>sloc</c>, <c>cc</c>, <c>mi</c>, <c>smells</c>, <c>coupling</c>.
+    /// Returns scores in the same order as <paramref name="files"/>; higher score = higher refactor priority.
+    /// </summary>
+    public static double[] ComputeRefactorScores(IReadOnlyList<FileMetrics> files, string focus = "overall")
+    {
+        if (files.Count == 0)
+            return Array.Empty<double>();
+
+        var focusMetrics = focus
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(f => f.ToLowerInvariant())
+            .ToHashSet();
+
+        if (focusMetrics.Count == 0 || focusMetrics.Contains("overall"))
+            return ComputeBadness(files);
+
+        var components = new List<double[]>();
+
+        if (focusMetrics.Contains("sloc"))
+            components.Add(MinMaxNormalize(files.Select(f => (double)f.Sloc).ToArray()));
+        if (focusMetrics.Contains("cc"))
+            components.Add(MinMaxNormalize(files.Select(f => f.CyclomaticComplexity).ToArray()));
+        if (focusMetrics.Contains("mi"))
+        {
+            // Lower MI = worse maintainability → invert so high score = bad
+            var normalized = MinMaxNormalize(files.Select(f => f.MaintainabilityIndex).ToArray());
+            components.Add(normalized.Select(v => 1.0 - v).ToArray());
+        }
+        if (focusMetrics.Contains("smells"))
+            components.Add(MinMaxNormalize(files.Select(RawSmells).ToArray()));
+        if (focusMetrics.Contains("coupling"))
+            components.Add(MinMaxNormalize(files.Select(f => f.CouplingProxy).ToArray()));
+
+        // Fallback to overall if no recognised metric was specified
+        if (components.Count == 0)
+            return ComputeBadness(files);
+
+        var result = new double[files.Count];
+        for (int i = 0; i < files.Count; i++)
+        {
+            double sum = 0.0;
+            foreach (var comp in components)
+                sum += comp[i];
+            result[i] = sum / components.Count;
+        }
+        return result;
+    }
+
     // Weighted smells score used as raw input before normalization
     private static double RawSmells(FileMetrics f) =>
         f.SmellsHigh * SmellHighWeight + f.SmellsMedium * SmellMediumWeight + f.SmellsLow * SmellLowWeight;
