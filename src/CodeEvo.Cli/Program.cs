@@ -192,7 +192,7 @@ scanDetailsCommand.SetHandler((string repoPath, string dbPath, string? htmlPath)
     reporter.ReportSlocByLanguage(files);
     reporter.ReportFileMetrics(files.Where(f => f.Language.Length > 0).ToList());
     reporter.ReportNotableEvents(troubled, heroic);
-    reporter.ReportAssessment(repoMetrics, prevMetrics);
+    reporter.ReportAssessment(repoMetrics, prevMetrics, history.Select(h => h.Item2).ToList());
 
     // ── HTML output ───────────────────────────────────────────────────────────
     if (htmlPath is not null)

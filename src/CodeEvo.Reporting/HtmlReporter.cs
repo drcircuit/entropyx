@@ -67,7 +67,8 @@ public class HtmlReporter
         AppendHtmlHeader(sb, reportDate);
         AppendDrilldownHeader(sb, commit, metrics, reportDate);
         AppendDrilldownSummaryStats(sb, metrics, previousMetrics);
-        AppendDrilldownAssessment(sb, metrics, previousMetrics);
+        var historicalScores = ordered.Select(h => h.Metrics.EntropyScore).ToList();
+        AppendDrilldownAssessment(sb, metrics, previousMetrics, historicalScores);
         AppendDrilldownLanguageChart(sb, files);
         AppendHeatmapSection(sb, files, badness);
         AppendDrilldownFileTable(sb, files, badness);
@@ -138,16 +139,16 @@ public class HtmlReporter
         return $"<span class=\"{cls}\" style=\"font-size:0.65rem\">{EscapeHtml(val)}</span>";
     }
 
-    private static void AppendDrilldownAssessment(StringBuilder sb, RepoMetrics metrics, RepoMetrics? previous)
+    private static void AppendDrilldownAssessment(StringBuilder sb, RepoMetrics metrics, RepoMetrics? previous, IReadOnlyList<double> historicalScores)
     {
         double e = metrics.EntropyScore;
         var (grade, color, description) = e switch
         {
-            < 0.3 => ("Excellent", "#22c55e", "Entropy is very low – the codebase is in excellent shape."),
-            < 0.7 => ("Good",      "#86efac", "Entropy is low – only minor areas could be improved."),
-            < 1.2 => ("Fair",      "#f59e0b", "Entropy is moderate – technical debt is accumulating."),
-            < 2.0 => ("Poor",      "#f97316", "Entropy is high – significant refactoring is recommended."),
-            _     => ("Critical",  "#ef4444", "Entropy is very high – immediate attention required.")
+            < 0.3 => ("Excellent", "#22c55e", "Entropy drift is very low – the codebase temperature is cool."),
+            < 0.7 => ("Good",      "#86efac", "Entropy drift is low – only minor areas are contributing to structural drift."),
+            < 1.2 => ("Fair",      "#f59e0b", "Entropy drift is moderate – structural complexity is accumulating over time."),
+            < 2.0 => ("Poor",      "#f97316", "Entropy drift is high – structural complexity has spread significantly across the codebase."),
+            _     => ("Critical",  "#ef4444", "Entropy drift is very high – complexity is broadly distributed. Use trend analysis to identify when this began.")
         };
 
         string trend = "";
@@ -162,15 +163,44 @@ public class HtmlReporter
             };
         }
 
+        string relativeContext = "";
+        if (historicalScores.Count >= 3)
+        {
+            double min  = historicalScores.Min();
+            double max  = historicalScores.Max();
+            double mean = historicalScores.Average();
+            int countAtOrBelow = historicalScores.Count(s => s <= e);
+            double pct = (double)countAtOrBelow / historicalScores.Count * 100.0;
+
+            string relativePos = pct switch
+            {
+                <= 25  => "near its historical low",
+                <= 50  => "below its historical average",
+                <= 75  => "above its historical average",
+                <= 90  => "near its historical high",
+                _      => "at or near its all-time high"
+            };
+
+            relativeContext = $"""
+                    <p style="margin-top:0.75rem;padding:0.75rem 1rem;background:var(--surface);border-radius:8px;border-left:3px solid {color}">
+                      <strong>📈 Relative to this repo's own history ({historicalScores.Count} snapshots):</strong><br>
+                      This score is <em>{relativePos}</em> — at the {pct.ToString("F0", CultureInfo.InvariantCulture)}{OrdinalSuffix(pct)} percentile of recorded history.<br>
+                      <span style="color:var(--muted);font-size:0.85em">Historical range: {min.ToString("F4", CultureInfo.InvariantCulture)} – {max.ToString("F4", CultureInfo.InvariantCulture)} &nbsp;·&nbsp; avg: {mean.ToString("F4", CultureInfo.InvariantCulture)}</span>
+                    </p>
+            """;
+        }
+
         sb.AppendLine($$"""
                 <section>
                   <div class="card">
                     <h2>📊 Assessment</h2>
                     <p style="font-size:1.1rem;margin-bottom:0.5rem">
-                      Health Grade: <strong style="color:{{color}}">{{EscapeHtml(grade)}}</strong>
+                      Drift Level: <strong style="color:{{color}}">{{EscapeHtml(grade)}}</strong>
                       {{(trend.Length > 0 ? $"&nbsp;·&nbsp; {trend}" : "")}}
                     </p>
                     <p style="color:var(--muted)">{{EscapeHtml(description)}}</p>
+                    {{relativeContext}}
+                    <p style="color:var(--muted);font-size:0.8em;margin-top:0.5rem">ℹ️ EntropyX measures structural drift over time — not a pass/fail grade. A growing codebase naturally accumulates entropy; use trend analysis for actionable insights.</p>
                   </div>
                 </section>
             """);
@@ -1083,6 +1113,15 @@ public class HtmlReporter
         text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
     private static string JsonString(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+
+    /// <summary>Returns the correct English ordinal suffix (st/nd/rd/th) for a percentile value.</summary>
+    private static string OrdinalSuffix(double value)
+    {
+        int n = (int)Math.Round(value);
+        if (n % 100 is 11 or 12 or 13)
+            return "th";
+        return (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+    }
 
     // Downsample a list to at most maxPoints entries using uniform stride selection,
     // always keeping the first and last entry so chart extremes are preserved.

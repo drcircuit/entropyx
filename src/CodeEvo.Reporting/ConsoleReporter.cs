@@ -285,25 +285,56 @@ public class ConsoleReporter
     /// <summary>
     /// Renders a health assessment for the scanned commit, including a grade, entropy score,
     /// textual description, and optional trend vs the previous commit.
+    /// When <paramref name="allHistory"/> contains 3 or more snapshots the assessment is also
+    /// expressed relative to the repository's own recorded history.
     /// </summary>
-    public void ReportAssessment(RepoMetrics current, RepoMetrics? previous)
+    public void ReportAssessment(RepoMetrics current, RepoMetrics? previous, IReadOnlyList<RepoMetrics>? allHistory = null)
     {
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[bold]Assessment[/]");
 
         var (grade, gradeColor, description) = current.EntropyScore switch
         {
-            < 0.3 => ("Excellent", Color.Green,    "Codebase is in excellent health. Entropy is very low."),
-            < 0.7 => ("Good",      Color.GreenYellow, "Codebase is in good health. Some minor areas could be improved."),
-            < 1.2 => ("Fair",      Color.Yellow,   "Codebase health is fair. Technical debt is accumulating."),
-            < 2.0 => ("Poor",      Color.OrangeRed1, "Codebase health is poor. Significant refactoring is recommended."),
-            _     => ("Critical",  Color.Red,      "Codebase health is critical. Immediate attention required.")
+            < 0.3 => ("Excellent", Color.Green,    "Entropy drift is very low – the codebase temperature is cool."),
+            < 0.7 => ("Good",      Color.GreenYellow, "Entropy drift is low – only minor areas are contributing to structural drift."),
+            < 1.2 => ("Fair",      Color.Yellow,   "Entropy drift is moderate – structural complexity is accumulating over time."),
+            < 2.0 => ("Poor",      Color.OrangeRed1, "Entropy drift is high – structural complexity has spread significantly across the codebase."),
+            _     => ("Critical",  Color.Red,      "Entropy drift is very high – complexity is broadly distributed. Use trend analysis to identify when this began.")
         };
 
-        AnsiConsole.MarkupLine($"  Health Grade:   [{gradeColor}]{grade}[/]");
+        AnsiConsole.MarkupLine($"  Drift Level:    [{gradeColor}]{grade}[/]");
         AnsiConsole.MarkupLine($"  Entropy Score:  [magenta]{current.EntropyScore:F4}[/]");
         AnsiConsole.MarkupLine($"  Files / SLOC:   [green]{current.TotalFiles}[/] / [green]{current.TotalSloc:N0}[/]");
         AnsiConsole.MarkupLine($"  {description}");
+
+        // Show relative context when enough history is available
+        var scores = allHistory?.Select(m => m.EntropyScore).ToList();
+        if (scores is { Count: >= 3 })
+        {
+            double min  = scores.Min();
+            double max  = scores.Max();
+            double mean = scores.Average();
+            double e    = current.EntropyScore;
+            int countAtOrBelow = scores.Count(s => s <= e);
+            double pct  = (double)countAtOrBelow / scores.Count * 100.0;
+
+            string relativePos = pct switch
+            {
+                <= 25  => "near its historical low",
+                <= 50  => "below its historical average",
+                <= 75  => "above its historical average",
+                <= 90  => "near its historical high",
+                _      => "at or near its all-time high"
+            };
+
+            AnsiConsole.MarkupLine($"\n  [bold]Relative to this repo's own history ({scores.Count} snapshots):[/]");
+            AnsiConsole.MarkupLine($"  This score is [cyan]{Markup.Escape(relativePos)}[/] — at the {pct:F0}{OrdinalSuffix(pct)} percentile of recorded history.");
+            AnsiConsole.MarkupLine($"  [grey]Historical range: {min:F4} – {max:F4}  ·  avg: {mean:F4}[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine($"\n  [grey]ℹ️  EntropyX measures structural drift over time — not a pass/fail grade.[/]");
+        }
 
         if (previous is not null)
         {
@@ -427,5 +458,14 @@ public class ConsoleReporter
     {
         int filled = (int)Math.Round(normalized * 10);
         return new string('█', filled) + new string('░', 10 - filled);
+    }
+
+    /// <summary>Returns the correct English ordinal suffix (st/nd/rd/th) for a percentile value.</summary>
+    private static string OrdinalSuffix(double value)
+    {
+        int n = (int)Math.Round(value);
+        if (n % 100 is 11 or 12 or 13)
+            return "th";
+        return (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
     }
 }
