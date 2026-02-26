@@ -314,9 +314,11 @@ public class ConsoleReporter
         }
     }
 
-    public void ReportRepoMetrics(RepoMetrics repoMetrics)
+    public void ReportRepoMetrics(RepoMetrics repoMetrics, string? repositoryName = null)
     {
-        AnsiConsole.MarkupLine($"[bold cyan]Commit:[/] [yellow]{repoMetrics.CommitHash[..Math.Min(8, repoMetrics.CommitHash.Length)]}[/]  " +
+        var repoPrefix = string.IsNullOrWhiteSpace(repositoryName) ? "" : $"[bold cyan]Repo:[/] [blue]{Markup.Escape(repositoryName)}[/]  ";
+        AnsiConsole.MarkupLine(repoPrefix +
+                               $"[bold cyan]Commit:[/] [yellow]{repoMetrics.CommitHash[..Math.Min(8, repoMetrics.CommitHash.Length)]}[/]  " +
                                $"Files: [green]{repoMetrics.TotalFiles}[/]  " +
                                $"SLOC: [green]{repoMetrics.TotalSloc}[/]  " +
                                $"Entropy: [magenta]{repoMetrics.EntropyScore:F4}[/]");

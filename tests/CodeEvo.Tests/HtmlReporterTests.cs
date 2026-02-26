@@ -1,5 +1,6 @@
 using CodeEvo.Core.Models;
 using CodeEvo.Reporting;
+using System.Globalization;
 using Xunit;
 
 namespace CodeEvo.Tests;
@@ -95,6 +96,20 @@ public class HtmlReporterTests
         var reporter = new HtmlReporter();
         var html = reporter.Generate([], []);
         Assert.Contains("chart.js", html);
+    }
+
+    [Fact]
+    public void Generate_WithRepositoryName_IncludesItInHeader()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("aaa1", 0), MakeRepoMetrics("aaa1", 0.7)),
+        };
+
+        var html = reporter.Generate(history, [], repositoryName: "entropyx");
+
+        Assert.Contains("EntropyX Report — entropyx", html);
     }
 
     // ── ComputeDeltas ─────────────────────────────────────────────────────────
@@ -555,6 +570,18 @@ public class HtmlReporterTests
     }
 
     [Fact]
+    public void GenerateDrilldown_WithRepositoryName_IncludesItInHeader()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("repo1");
+        var metrics = MakeRepoMetrics("repo1", 0.8);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null, "entropyx");
+
+        Assert.Contains("EntropyX Drilldown — entropyx", html);
+    }
+
+    [Fact]
     public void GenerateDrilldown_GradeExcellent_WhenEntropyBelowThreshold()
     {
         var reporter = new HtmlReporter();
@@ -895,5 +922,63 @@ public class HtmlReporterTests
         var tableSection = html[tableStart..chartStart];
         Assert.DoesNotContain("<xss>", tableSection);
         Assert.Contains("&lt;xss&gt;", tableSection);
+    }
+
+    [Fact]
+    public void ExportSvgFigures_UsesInvariantCoordinateFormatting()
+    {
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
+            CultureInfo.CurrentUICulture = new CultureInfo("fr-FR");
+
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (new CommitInfo("a", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("a", 10, 100, 0.5)),
+                (new CommitInfo("b", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("b", 12, 150, 0.8)),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+            Assert.Contains("<polyline points=\"72.0,", svg);
+            Assert.DoesNotContain("72,0,", svg);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExportSvgFigures_WithRepositoryName_IncludesNameInFigureTitle()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (new CommitInfo("a", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("a", 10, 100, 0.5)),
+                (new CommitInfo("b", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("b", 12, 150, 0.8)),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history, repositoryName: "entropyx");
+
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+            Assert.Contains("entropyx — SLOC Over Time", svg);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
     }
 }

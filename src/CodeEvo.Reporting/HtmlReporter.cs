@@ -18,7 +18,8 @@ public class HtmlReporter
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
         IReadOnlyList<FileMetrics> latestFiles,
         IReadOnlyList<CommitFileStats>? commitStats = null,
-        IReadOnlyList<FileMetrics>? prevFiles = null)
+        IReadOnlyList<FileMetrics>? prevFiles = null,
+        string? repositoryName = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -40,7 +41,7 @@ public class HtmlReporter
 
         double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles);
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles, repositoryName);
     }
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
@@ -209,7 +210,8 @@ public class HtmlReporter
         RepoMetrics metrics,
         IReadOnlyList<FileMetrics> files,
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
-        RepoMetrics? previousMetrics)
+        RepoMetrics? previousMetrics,
+        string? repositoryName = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -219,8 +221,8 @@ public class HtmlReporter
         var sb = new StringBuilder();
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
-        AppendHtmlHeader(sb, reportDate);
-        AppendDrilldownHeader(sb, commit, metrics, reportDate);
+        AppendHtmlHeader(sb, reportDate, string.IsNullOrWhiteSpace(repositoryName) ? "EntropyX Drilldown Report" : $"{repositoryName} - EntropyX Drilldown Report");
+        AppendDrilldownHeader(sb, commit, metrics, reportDate, repositoryName);
         AppendDrilldownSummaryStats(sb, metrics, previousMetrics);
         var historicalScores = ordered.Select(h => h.Metrics.EntropyScore).ToList();
         AppendDrilldownAssessment(sb, metrics, previousMetrics, historicalScores);
@@ -234,17 +236,20 @@ public class HtmlReporter
         return sb.ToString();
     }
 
-    private static void AppendDrilldownHeader(StringBuilder sb, CommitInfo commit, RepoMetrics metrics, string reportDate)
+    private static void AppendDrilldownHeader(StringBuilder sb, CommitInfo commit, RepoMetrics metrics, string reportDate, string? repositoryName)
     {
         var hash = commit.Hash[..Math.Min(8, commit.Hash.Length)];
         var date = commit.Timestamp != DateTimeOffset.MinValue
             ? commit.Timestamp.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)
             : "unknown";
         string badge = EntropyBadgeSvg(metrics.EntropyScore);
+        var title = string.IsNullOrWhiteSpace(repositoryName)
+            ? "⚡ EntropyX Drilldown"
+            : $"⚡ EntropyX Drilldown — {EscapeHtml(repositoryName)}";
         sb.AppendLine($$"""
               <header>
                 <div>
-                  <h1>⚡ EntropyX Drilldown</h1>
+                  <h1>{{title}}</h1>
                   <div class="subtitle">Commit <code style="color:var(--accent)">{{EscapeHtml(hash)}}</code> &nbsp;·&nbsp; {{EscapeHtml(date)}} &nbsp;·&nbsp; Generated {{reportDate}}</div>
                 </div>
                 <div>{{badge}}</div>
@@ -532,14 +537,15 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> latestFiles,
         double[] badness,
         IReadOnlyList<CommitFileStats>? commitStats = null,
-        IReadOnlyList<FileMetrics>? prevFiles = null)
+        IReadOnlyList<FileMetrics>? prevFiles = null,
+        string? repositoryName = null)
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
-        AppendHtmlHeader(sb, reportDate);
-        AppendSummarySection(sb, latest, ordered.Count, reportDate);
+        AppendHtmlHeader(sb, reportDate, string.IsNullOrWhiteSpace(repositoryName) ? "EntropyX Code Health Report" : $"{repositoryName} - EntropyX Code Health Report");
+        AppendSummarySection(sb, latest, ordered.Count, reportDate, repositoryName);
         AppendGaugesSection(sb, latest, latestFiles, ordered);
         AppendEntropyChart(sb, ordered);
         AppendGrowthChart(sb, ordered);
@@ -557,7 +563,7 @@ public class HtmlReporter
         return sb.ToString();
     }
 
-    private static void AppendHtmlHeader(StringBuilder sb, string reportDate)
+    private static void AppendHtmlHeader(StringBuilder sb, string reportDate, string pageTitle = "EntropyX Code Health Report")
     {
         sb.Append("""
             <!DOCTYPE html>
@@ -565,7 +571,11 @@ public class HtmlReporter
             <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>EntropyX Code Health Report</title>
+            """);
+        sb.Append("  <title>");
+        sb.Append(EscapeHtml(pageTitle));
+        sb.AppendLine("</title>");
+        sb.Append("""
               <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
               <style>
                 :root {
@@ -636,17 +646,20 @@ public class HtmlReporter
             """);
     }
 
-    private static void AppendSummarySection(StringBuilder sb, RepoMetrics? latest, int commitCount, string reportDate)
+    private static void AppendSummarySection(StringBuilder sb, RepoMetrics? latest, int commitCount, string reportDate, string? repositoryName)
     {
         string entropy = latest is not null ? latest.EntropyScore.ToString("F4", CultureInfo.InvariantCulture) : "—";
         string files = latest is not null ? latest.TotalFiles.ToString(CultureInfo.InvariantCulture) : "—";
         string sloc = latest is not null ? latest.TotalSloc.ToString("N0", CultureInfo.InvariantCulture) : "—";
         string badge = latest is not null ? EntropyBadgeSvg(latest.EntropyScore) : "";
 
+        var title = string.IsNullOrWhiteSpace(repositoryName)
+            ? "⚡ EntropyX Report"
+            : $"⚡ EntropyX Report — {EscapeHtml(repositoryName)}";
         sb.AppendLine($$"""
               <header>
                 <div>
-                  <h1>⚡ EntropyX Report</h1>
+                  <h1>{{title}}</h1>
                   <div class="subtitle">Generated {{reportDate}} &nbsp;·&nbsp; {{commitCount}} commit(s) analysed</div>
                 </div>
                 <div>{{badge}}</div>
@@ -1434,7 +1447,8 @@ public class HtmlReporter
     public static void ExportSvgFigures(
         string outputDir,
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
-        IReadOnlyList<CommitFileStats>? commitStats = null)
+        IReadOnlyList<CommitFileStats>? commitStats = null,
+        string? repositoryName = null)
     {
         Directory.CreateDirectory(outputDir);
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
@@ -1445,21 +1459,21 @@ public class HtmlReporter
                           h.Metrics.EntropyScore))
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "entropy-over-time.svg"),
-            BuildLineSvg("Entropy Over Time", "Date", "Entropy Score", entropyPts, "#7c6af7"));
+            BuildLineSvg(WithRepositoryName("Entropy Over Time", repositoryName), "Date", "Entropy Score", entropyPts, "#7c6af7"));
 
         var slocPts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                           (double)h.Metrics.TotalSloc))
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "sloc-over-time.svg"),
-            BuildLineSvg("SLOC Over Time", "Date", "SLOC", slocPts, "#22c55e"));
+            BuildLineSvg(WithRepositoryName("SLOC Over Time", repositoryName), "Date", "SLOC", slocPts, "#22c55e"));
 
         var slocPerFilePts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                           h.Metrics.TotalFiles > 0 ? (double)h.Metrics.TotalSloc / h.Metrics.TotalFiles : 0.0))
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "sloc-per-file-over-time.svg"),
-            BuildLineSvg("SLOC per File Over Time", "Date", "SLOC / File", slocPerFilePts, "#f59e0b"));
+            BuildLineSvg(WithRepositoryName("SLOC per File Over Time", repositoryName), "Date", "SLOC / File", slocPerFilePts, "#f59e0b"));
 
         if (commitStats is { Count: > 0 })
         {
@@ -1470,16 +1484,19 @@ public class HtmlReporter
                               s.AvgCc))
                 .ToList();
             File.WriteAllText(Path.Combine(outputDir, "cc-over-time.svg"),
-                BuildLineSvg("Avg Cyclomatic Complexity Over Time", "Date", "Avg CC", ccPts, "#ef4444"));
+                BuildLineSvg(WithRepositoryName("Avg Cyclomatic Complexity Over Time", repositoryName), "Date", "Avg CC", ccPts, "#ef4444"));
 
             var smellPts = sampledStats
                 .Select(s => (s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                               s.AvgSmell))
                 .ToList();
             File.WriteAllText(Path.Combine(outputDir, "smell-over-time.svg"),
-                BuildLineSvg("Avg Smell Score Over Time", "Date", "Avg Smell", smellPts, "#a855f7"));
+                BuildLineSvg(WithRepositoryName("Avg Smell Score Over Time", repositoryName), "Date", "Avg Smell", smellPts, "#a855f7"));
         }
     }
+
+    private static string WithRepositoryName(string title, string? repositoryName) =>
+        string.IsNullOrWhiteSpace(repositoryName) ? title : $"{repositoryName} — {title}";
 
     /// <summary>
     /// Generates a standalone SVG line chart suitable for embedding in papers/whitepapers.
@@ -1520,6 +1537,7 @@ public class HtmlReporter
         // Map a data point to SVG coordinates
         double Px(int i) => padL + i * xScale;
         double Py(double v) => padT + chartH - (v - yAxisMin) * yScale;
+        static string FormatInvariantF1(double v) => v.ToString("F1", CultureInfo.InvariantCulture);
 
         var sb = new StringBuilder();
         sb.Append($"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">""");
@@ -1545,11 +1563,11 @@ public class HtmlReporter
         {
             double v = yAxisMin + t * (yAxisMax - yAxisMin) / gridSteps;
             double sy = Py(v);
-            sb.Append($"""<line x1="{padL}" y1="{sy:F1}" x2="{padL + chartW}" y2="{sy:F1}" stroke="#2d3044" stroke-width="1"/>""");
+            sb.Append($"""<line x1="{padL}" y1="{FormatInvariantF1(sy)}" x2="{padL + chartW}" y2="{FormatInvariantF1(sy)}" stroke="#2d3044" stroke-width="1"/>""");
             string tickLbl = v >= ThousandsThreshold ? (v / ThousandsThreshold).ToString("F1", CultureInfo.InvariantCulture) + "k"
                            : v >= DecimalThreshold   ? v.ToString("F1", CultureInfo.InvariantCulture)
                            :                           v.ToString("F4", CultureInfo.InvariantCulture);
-            sb.Append($"""<text x="{padL - 6}" y="{sy + 4:F1}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
+            sb.Append($"""<text x="{padL - 6}" y="{FormatInvariantF1(sy + 4)}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
         }
 
         // X-axis tick labels (show at most 10 evenly spaced)
@@ -1560,7 +1578,7 @@ public class HtmlReporter
             int idx = (int)Math.Round(t * xTickStep);
             if (idx >= points.Count) idx = points.Count - 1;
             double sx = Px(idx);
-            sb.Append($"""<text x="{sx:F1}" y="{padT + chartH + 18}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(points[idx].Label)}</text>""");
+            sb.Append($"""<text x="{FormatInvariantF1(sx)}" y="{padT + chartH + 18}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(points[idx].Label)}</text>""");
         }
 
         // Axes
@@ -1569,10 +1587,10 @@ public class HtmlReporter
 
         // Filled area under the line
         var fillPts = new StringBuilder();
-        fillPts.Append($"{Px(0):F1},{padT + chartH} ");
+        fillPts.Append($"{FormatInvariantF1(Px(0))},{padT + chartH} ");
         foreach (var (i, (_, v)) in points.Select((p, i) => (i, p)))
-            fillPts.Append($"{Px(i):F1},{Py(v):F1} ");
-        fillPts.Append($"{Px(points.Count - 1):F1},{padT + chartH}");
+            fillPts.Append($"{FormatInvariantF1(Px(i))},{FormatInvariantF1(Py(v))} ");
+        fillPts.Append($"{FormatInvariantF1(Px(points.Count - 1))},{padT + chartH}");
 
         // Parse lineColor to derive fill opacity variant (e.g. #7c6af7 → rgba)
         string fillColor = lineColor.StartsWith('#')
@@ -1581,7 +1599,7 @@ public class HtmlReporter
         sb.Append($"""<polygon points="{fillPts}" fill="{fillColor}"/>""");
 
         // The line itself
-        var linePts = string.Join(" ", points.Select((p, i) => $"{Px(i):F1},{Py(p.Value):F1}"));
+        var linePts = string.Join(" ", points.Select((p, i) => $"{FormatInvariantF1(Px(i))},{FormatInvariantF1(Py(p.Value))}"));
         sb.Append($"""<polyline points="{linePts}" fill="none" stroke="{EscapeHtml(lineColor)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>""");
 
         sb.Append("</svg>");
