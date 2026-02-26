@@ -99,4 +99,75 @@ public class ScanFilterTests
     [InlineData("Other.cs", "Test*", false)]
     public void MatchesFilter_TrailingWildcard_Works(string fileName, string pattern, bool expected)
         => Assert.Equal(expected, ScanFilter.MatchesFilter(fileName, [pattern]));
+
+    // ── LoadExIgnorePatterns ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void LoadExIgnorePatterns_MissingFile_ReturnsEmpty()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        try { Assert.Empty(ScanFilter.LoadExIgnorePatterns(dir)); }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void LoadExIgnorePatterns_ReadsPatterns_SkipsCommentsAndBlankLines()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllLines(Path.Combine(dir, ".exignore"), [
+                "# this is a comment",
+                "*.log",
+                "",
+                "generated",
+                "  # indented comment  ",
+                "*.min.js",
+            ]);
+            var patterns = ScanFilter.LoadExIgnorePatterns(dir);
+            Assert.Equal(new string[] { "*.log", "generated", "*.min.js" }, patterns);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // ── IsExIgnored ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void IsExIgnored_EmptyPatterns_ReturnsFalse()
+    {
+        var root = Path.GetTempPath();
+        Assert.False(ScanFilter.IsExIgnored(Path.Combine(root, "src", "Foo.cs"), root, []));
+    }
+
+    [Theory]
+    [InlineData("src/Foo.log", "*.log")]          // filename extension match
+    [InlineData("generated/Foo.cs", "generated")] // directory segment match
+    [InlineData("src/generated/Bar.cs", "generated")] // nested directory segment
+    [InlineData("src/Foo.min.js", "*.min.js")]    // multi-dot extension match
+    public void IsExIgnored_MatchingPattern_ReturnsTrue(string relPath, string pattern)
+    {
+        var root = Path.GetTempPath();
+        var fullPath = Path.Combine(root, relPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(ScanFilter.IsExIgnored(fullPath, root, [pattern]));
+    }
+
+    [Theory]
+    [InlineData("src/Foo.cs", "*.log")]
+    [InlineData("src/Foo.cs", "generated")]
+    public void IsExIgnored_NonMatchingPattern_ReturnsFalse(string relPath, string pattern)
+    {
+        var root = Path.GetTempPath();
+        var fullPath = Path.Combine(root, relPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.False(ScanFilter.IsExIgnored(fullPath, root, [pattern]));
+    }
+
+    [Fact]
+    public void IsExIgnored_RelativePath_WorksWithoutRoot()
+    {
+        // Files from git traversal arrive as relative paths
+        var root = "/repo";
+        Assert.True(ScanFilter.IsExIgnored("src/generated/Foo.cs", root, ["generated"]));
+    }
 }

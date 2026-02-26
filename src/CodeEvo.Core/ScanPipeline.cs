@@ -15,7 +15,10 @@ public class ScanPipeline
 
     public (IReadOnlyList<FileMetrics> Files, RepoMetrics Repo) ScanCommit(CommitInfo commit, string repoPath)
     {
-        var changedFiles = _git.GetChangedFiles(repoPath, commit.Hash).ToList();
+        var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(repoPath);
+        var changedFiles = _git.GetChangedFiles(repoPath, commit.Hash)
+            .Where(f => !ScanFilter.IsExIgnored(f, repoPath, exIgnorePatterns))
+            .ToList();
         var fileMetrics = new List<FileMetrics>();
 
         using var repo = new Repository(repoPath);
@@ -59,6 +62,7 @@ public class ScanPipeline
 
     public IReadOnlyList<FileMetrics> ScanDirectory(string dirPath, string[]? includePatterns = null)
     {
+        var exIgnorePatterns = ScanFilter.LoadExIgnorePatterns(dirPath);
         var lizardResults = _lizard?.AnalyzeDirectory(dirPath)
             ?? new Dictionary<string, LizardFileResult>();
 
@@ -69,7 +73,9 @@ public class ScanPipeline
                 IgnoreInaccessible = true
             })
             .AsParallel()
-            .Where(f => !ScanFilter.IsPathIgnored(f, dirPath) && ScanFilter.MatchesFilter(f, includePatterns))
+            .Where(f => !ScanFilter.IsPathIgnored(f, dirPath)
+                     && !ScanFilter.IsExIgnored(f, dirPath, exIgnorePatterns)
+                     && ScanFilter.MatchesFilter(f, includePatterns))
             .Select(filePath =>
             {
                 var language = LanguageDetector.Detect(filePath);
