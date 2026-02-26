@@ -43,6 +43,7 @@ public class ScanPipeline
             {
                 var language = LanguageDetector.Detect(filePath);
                 int sloc = 0;
+                int coupling = 0;
 
                 var entry = gitCommit?.Tree[filePath];
                 if (entry?.TargetType == TreeEntryTargetType.Blob)
@@ -52,6 +53,7 @@ public class ScanPipeline
                     var content = reader.ReadToEnd();
                     var lines = content.Split('\n');
                     sloc = SlocCounter.CountSloc(lines, language);
+                    coupling = CouplingCounter.Count(lines, language);
                 }
 
                 // Git paths always use '/' regardless of OS; Path.GetRelativePath in
@@ -73,7 +75,7 @@ public class ScanPipeline
                     SmellsHigh: lizard?.SmellsHigh ?? 0,
                     SmellsMedium: lizard?.SmellsMedium ?? 0,
                     SmellsLow: lizard?.SmellsLow ?? 0,
-                    CouplingProxy: 0,
+                    CouplingProxy: coupling,
                     MaintainabilityProxy: 0,
                     Kind: kind));
             }
@@ -143,6 +145,7 @@ public class ScanPipeline
                 catch (IOException) { return null; }
                 catch (UnauthorizedAccessException) { return null; }
                 var sloc = SlocCounter.CountSloc(lines, language);
+                var coupling = CouplingCounter.Count(lines, language);
                 var relativePath = Path.GetRelativePath(dirPath, filePath);
                 lizardResults.TryGetValue(relativePath, out var lizard);
                 var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
@@ -158,7 +161,7 @@ public class ScanPipeline
                     SmellsHigh: lizard?.SmellsHigh ?? 0,
                     SmellsMedium: lizard?.SmellsMedium ?? 0,
                     SmellsLow: lizard?.SmellsLow ?? 0,
-                    CouplingProxy: 0,
+                    CouplingProxy: coupling,
                     MaintainabilityProxy: 0,
                     Kind: kind);
             })
