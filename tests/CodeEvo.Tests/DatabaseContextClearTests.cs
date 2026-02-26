@@ -67,4 +67,46 @@ public class DatabaseContextClearTests : IDisposable
         var exception = Record.Exception(() => _db.Clear());
         Assert.Null(exception);
     }
+
+    // ── RegisterRepo / GetAllRepos ────────────────────────────────────────────
+
+    [Fact]
+    public void RegisterRepo_CanBeRetrievedByGetAllRepos()
+    {
+        _db.RegisterRepo("owner/myrepo", "https://github.com/owner/myrepo.git");
+
+        var repos = _db.GetAllRepos();
+
+        Assert.Single(repos);
+        Assert.Equal("owner/myrepo", repos[0].Name);
+        Assert.Equal("https://github.com/owner/myrepo.git", repos[0].RemoteUrl);
+    }
+
+    [Fact]
+    public void RegisterRepo_IsIdempotent_DoesNotDuplicate()
+    {
+        _db.RegisterRepo("owner/myrepo", "https://github.com/owner/myrepo.git");
+        _db.RegisterRepo("owner/myrepo", "https://github.com/owner/myrepo.git");
+
+        var repos = _db.GetAllRepos();
+        Assert.Single(repos);
+    }
+
+    [Fact]
+    public void GetTotalCommitCount_ReturnsCorrectCount()
+    {
+        _db.RegisterRepo("owner/myrepo", "https://github.com/owner/myrepo.git");
+        var commitRepo = new CommitRepository(_db);
+        commitRepo.Insert(new CommitInfo("aaa111", DateTimeOffset.UtcNow, []));
+        commitRepo.Insert(new CommitInfo("bbb222", DateTimeOffset.UtcNow, []));
+
+        Assert.Equal(2, _db.GetTotalCommitCount());
+    }
+
+    [Fact]
+    public void GetAllRepos_EmptyDatabase_ReturnsEmptyList()
+    {
+        var repos = _db.GetAllRepos();
+        Assert.Empty(repos);
+    }
 }

@@ -67,10 +67,10 @@ scanHeadCommand.AddArgument(scanHeadRepoArg);
 scanHeadCommand.AddOption(scanHeadDbOption);
 scanHeadCommand.SetHandler((string repoPath, string dbPath) =>
 {
-    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
+    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal, db) = BuildScanDeps(dbPath);
     var headCommit = traversal.GetAllCommits(repoPath).FirstOrDefault();
     if (headCommit is null) { AnsiConsole.MarkupLine("[red]No commits found.[/]"); return; }
-    RunGitScan([headCommit], pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
+    RunGitScan([headCommit], pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, db);
 }, scanHeadRepoArg, scanHeadDbOption);
 
 // scan from <commit> [repoPath] [--db]
@@ -83,9 +83,9 @@ scanFromCommand.AddArgument(scanFromRepoArg);
 scanFromCommand.AddOption(scanFromDbOption);
 scanFromCommand.SetHandler((string since, string repoPath, string dbPath) =>
 {
-    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
+    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal, db) = BuildScanDeps(dbPath);
     var commits = traversal.GetAllCommits(repoPath).Reverse().SkipWhile(c => c.Hash != since);
-    RunGitScan(commits, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
+    RunGitScan(commits, pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, db);
 }, scanFromCommitArg, scanFromRepoArg, scanFromDbOption);
 
 // scan full [repoPath] [--db]
@@ -96,8 +96,8 @@ scanFullCommand.AddArgument(scanFullRepoArg);
 scanFullCommand.AddOption(scanFullDbOption);
 scanFullCommand.SetHandler((string repoPath, string dbPath) =>
 {
-    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
-    RunGitScan(traversal.GetAllCommits(repoPath).Reverse(), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
+    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal, db) = BuildScanDeps(dbPath);
+    RunGitScan(traversal.GetAllCommits(repoPath).Reverse(), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, db);
 }, scanFullRepoArg, scanFullDbOption);
 
 // scan chk [repoPath] [--db]
@@ -108,8 +108,8 @@ scanChkCommand.AddArgument(scanChkRepoArg);
 scanChkCommand.AddOption(scanChkDbOption);
 scanChkCommand.SetHandler((string repoPath, string dbPath) =>
 {
-    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal) = BuildScanDeps(dbPath);
-    RunGitScan(traversal.GetCheckpointCommits(repoPath), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath);
+    var (reporter, commitRepo, fileRepo, repoMetricsRepo, pipeline, traversal, db) = BuildScanDeps(dbPath);
+    RunGitScan(traversal.GetCheckpointCommits(repoPath), pipeline, commitRepo, fileRepo, repoMetricsRepo, reporter, repoPath, db);
 }, scanChkRepoArg, scanChkDbOption);
 
 scanCommand.AddCommand(scanLangCommand);
@@ -269,12 +269,56 @@ heatmapCommand.SetHandler((string path, string? output, string? include) =>
 // ── db command group ──────────────────────────────────────────────────────────
 var dbCommand = new Command("db", "Database management commands");
 
-var dbClearDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
-var dbClearCommand = new Command("clear", "Clear all scanned data from the database");
-dbClearCommand.AddOption(dbClearDbOption);
-dbClearCommand.SetHandler((string dbPath) =>
+var dbListDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
+var dbListCommand = new Command("list", "List repos stored in the database");
+dbListCommand.AddOption(dbListDbOption);
+dbListCommand.SetHandler((string dbPath) =>
 {
-    AnsiConsole.MarkupLine($"[yellow]Warning:[/] This will erase [bold]all[/] scanned data in [cyan]{Markup.Escape(dbPath)}[/].");
+    if (!File.Exists(dbPath))
+    {
+        AnsiConsole.MarkupLine($"[red]Database not found:[/] {Markup.Escape(dbPath)}");
+        return;
+    }
+
+    var db = new DatabaseContext();
+    db.Initialize(dbPath);
+    var repos = db.GetAllRepos();
+
+    if (repos.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[grey]No repos found. Run a scan command first.[/]");
+        return;
+    }
+
+    var table = new Table()
+        .AddColumn("Repo")
+        .AddColumn("Remote URL");
+
+    foreach (var (name, remoteUrl) in repos)
+        table.AddRow(Markup.Escape(name), Markup.Escape(remoteUrl.Length > 0 ? remoteUrl : "(local)"));
+
+    AnsiConsole.Write(table);
+    AnsiConsole.MarkupLine($"[grey]{db.GetTotalCommitCount()} total commit(s) stored in {Markup.Escape(dbPath)}[/]");
+}, dbListDbOption);
+
+dbCommand.AddCommand(dbListCommand);
+
+// ── clear command ─────────────────────────────────────────────────────────────
+var clearRepoArg = new Argument<string>("repoPath", () => ".", "Path to the git repository to clear data for");
+var clearDbOption = new Option<string>("--db", () => "entropyx.db", "Path to the SQLite database file");
+var clearCommand = new Command("clear", "Clear all scanned data from the database for the given repository");
+clearCommand.AddArgument(clearRepoArg);
+clearCommand.AddOption(clearDbOption);
+clearCommand.SetHandler((string repoPath, string dbPath) =>
+{
+    if (!GitTraversal.IsValidRepo(repoPath))
+    {
+        AnsiConsole.MarkupLine($"[red]No git repository found at:[/] {Markup.Escape(Path.GetFullPath(repoPath))}");
+        return;
+    }
+
+    var (repoName, _) = GitTraversal.GetRepoInfo(repoPath);
+    AnsiConsole.MarkupLine($"[yellow]Warning:[/] This will erase [bold]all[/] scanned data in [cyan]{Markup.Escape(dbPath)}[/] (repo: [cyan]{Markup.Escape(repoName)}[/]).");
     if (!AnsiConsole.Confirm("Are you sure you want to clear the database?", defaultValue: false))
     {
         AnsiConsole.MarkupLine("[grey]Aborted. No data was changed.[/]");
@@ -284,10 +328,8 @@ dbClearCommand.SetHandler((string dbPath) =>
     var db = new DatabaseContext();
     db.Initialize(dbPath);
     db.Clear();
-    AnsiConsole.MarkupLine("[green]✓[/] Database cleared.");
-}, dbClearDbOption);
-
-dbCommand.AddCommand(dbClearCommand);
+    AnsiConsole.MarkupLine($"[green]✓[/] Database cleared for [cyan]{Markup.Escape(repoName)}[/].");
+}, clearRepoArg, clearDbOption);
 
 rootCommand.AddCommand(scanCommand);
 rootCommand.AddCommand(checkCommand);
@@ -295,6 +337,7 @@ rootCommand.AddCommand(reportCommand);
 rootCommand.AddCommand(toolsCommand);
 rootCommand.AddCommand(heatmapCommand);
 rootCommand.AddCommand(dbCommand);
+rootCommand.AddCommand(clearCommand);
 
 return await rootCommand.InvokeAsync(args);
 
@@ -302,13 +345,13 @@ return await rootCommand.InvokeAsync(args);
 static string[]? ParsePatterns(string? input) =>
     input?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRepository, ScanPipeline, GitTraversal)
+static (ConsoleReporter, CommitRepository, FileMetricsRepository, RepoMetricsRepository, ScanPipeline, GitTraversal, DatabaseContext)
     BuildScanDeps(string dbPath)
 {
     var db = new DatabaseContext();
     db.Initialize(dbPath);
     return (new ConsoleReporter(), new CommitRepository(db), new FileMetricsRepository(db),
-            new RepoMetricsRepository(db), new ScanPipeline(), new GitTraversal());
+            new RepoMetricsRepository(db), new ScanPipeline(), new GitTraversal(), db);
 }
 
 static void RunGitScan(
@@ -318,8 +361,15 @@ static void RunGitScan(
     FileMetricsRepository fileRepo,
     RepoMetricsRepository repoMetricsRepo,
     ConsoleReporter reporter,
-    string repoPath)
+    string repoPath,
+    DatabaseContext db)
 {
+    // Register repo metadata so 'db list' can show it
+    if (GitTraversal.IsValidRepo(repoPath))
+    {
+        var (repoName, remoteUrl) = GitTraversal.GetRepoInfo(repoPath);
+        db.RegisterRepo(repoName, remoteUrl);
+    }
     // Phase 1: discover which commits still need scanning
     List<CommitInfo> toScan = [];
     int skipped = 0;

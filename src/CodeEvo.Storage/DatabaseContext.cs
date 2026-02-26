@@ -39,8 +39,45 @@ public class DatabaseContext
                 TotalSloc INTEGER NOT NULL,
                 EntropyScore REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS Repos (
+                Name TEXT PRIMARY KEY,
+                RemoteUrl TEXT NOT NULL
+            );
             """;
         cmd.ExecuteNonQuery();
+    }
+
+    public void RegisterRepo(string name, string remoteUrl)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "INSERT OR IGNORE INTO Repos (Name, RemoteUrl) VALUES (@name, @remoteUrl)";
+        cmd.Parameters.AddWithValue("@name", name);
+        cmd.Parameters.AddWithValue("@remoteUrl", remoteUrl);
+        cmd.ExecuteNonQuery();
+    }
+
+    public IReadOnlyList<(string Name, string RemoteUrl)> GetAllRepos()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT Name, RemoteUrl FROM Repos ORDER BY Name";
+        var results = new List<(string, string)>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            results.Add((reader.GetString(0), reader.GetString(1)));
+        return results;
+    }
+
+    public int GetTotalCommitCount()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(1) FROM Commits";
+        return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     public SqliteConnection OpenConnection() => new(_connectionString);
