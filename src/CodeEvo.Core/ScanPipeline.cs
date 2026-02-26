@@ -54,7 +54,11 @@ public class ScanPipeline
                     sloc = SlocCounter.CountSloc(lines, language);
                 }
 
-                lizardResults.TryGetValue(filePath, out var lizard);
+                // Git paths always use '/' regardless of OS; Path.GetRelativePath in
+                // LizardAnalyzer.ParseCsvOutput returns OS-native separators ('\\' on Windows).
+                // Normalise before lookup so CC is found on Windows as well as Linux/macOS.
+                var lookupPath = filePath.Replace('/', Path.DirectorySeparatorChar);
+                lizardResults.TryGetValue(lookupPath, out var lizard);
                 var avgCc = lizard?.AvgCyclomaticComplexity ?? 0.0;
                 var mi = ComputeMaintainabilityIndex(sloc, avgCc);
                 var kind = ScanFilter.ClassifyCodeKind(filePath, repoPath, utilityPatterns);

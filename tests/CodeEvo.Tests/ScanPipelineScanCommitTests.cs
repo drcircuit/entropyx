@@ -1,4 +1,5 @@
 using CodeEvo.Core;
+using CodeEvo.Core.Models;
 using LibGit2Sharp;
 using Xunit;
 
@@ -94,5 +95,44 @@ public class ScanPipelineScanCommitTests : IDisposable
             _repoDir);
 
         Assert.Equal(2, files.Count);
+    }
+
+    /// <summary>
+    /// Regression test: git paths always use '/' as the separator, but
+    /// <see cref="LizardAnalyzer.ParseCsvOutput"/> uses <see cref="Path.GetRelativePath"/>
+    /// which returns OS-native separators ('\\' on Windows). ScanCommit must normalise
+    /// before the dictionary lookup so CC is populated on all platforms.
+    /// </summary>
+    [Fact]
+    public void ScanCommit_WithLizardResultsForSubdirectoryFile_PopulatesCc()
+    {
+        // Arrange: commit a file in a subdirectory so git yields a path containing '/'.
+        var commit = CommitFiles("init", ("src/Main.cs", "class Main { void A(){} }"));
+
+        // Build the fake Lizard result using OS-native path separators to simulate
+        // what LizardAnalyzer.ParseCsvOutput produces via Path.GetRelativePath.
+        var nativePath = "src" + Path.DirectorySeparatorChar + "Main.cs";
+        var fakeLizard = new FakeLizardAnalyzer(new Dictionary<string, LizardFileResult>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            [nativePath] = new LizardFileResult(
+                AvgCyclomaticComplexity: 7.5, SmellsHigh: 0, SmellsMedium: 0, SmellsLow: 1)
+        });
+
+        var pipeline = new ScanPipeline(fakeLizard);
+        var (files, _) = pipeline.ScanCommit(
+            new CommitInfo(commit.Sha, commit.Author.When, []),
+            _repoDir);
+
+        var main = Assert.Single(files, f => f.Path.EndsWith("Main.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(7.5, main.CyclomaticComplexity);
+        Assert.Equal(1, main.SmellsLow);
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private sealed class FakeLizardAnalyzer(IReadOnlyDictionary<string, LizardFileResult> results) : ILizardAnalyzer
+    {
+        public IReadOnlyDictionary<string, LizardFileResult> AnalyzeDirectory(string dirPath) => results;
     }
 }
