@@ -33,13 +33,15 @@ scanLangCommand.SetHandler((string path, string? include) =>
     reporter.ReportLanguageScan(files);
 }, scanLangPathArg, scanLangIncludeOption);
 
-// scan here [path] [--include <patterns>]
+// scan here [path] [--include <patterns>] [--save <output.json>]
 var scanHerePathArg = new Argument<string>("path", () => ".", "Directory to scan (no git required)");
 var scanHereIncludeOption = new Option<string?>("--include", () => null, "Comma-separated file patterns to include (e.g. *.cs,*.ts)");
+var scanHereSaveOption = new Option<string?>("--save", () => null, "Save a snapshot data.json to this file path (for later comparison)");
 var scanHereCommand = new Command("here", "Scan current directory without git");
 scanHereCommand.AddArgument(scanHerePathArg);
 scanHereCommand.AddOption(scanHereIncludeOption);
-scanHereCommand.SetHandler((string path, string? include) =>
+scanHereCommand.AddOption(scanHereSaveOption);
+scanHereCommand.SetHandler((string path, string? include, string? savePath) =>
 {
     var includePatterns = ParsePatterns(include);
     var pipeline = new ScanPipeline(new LizardAnalyzer());
@@ -57,7 +59,14 @@ scanHereCommand.SetHandler((string path, string? include) =>
     reporter.ReportScanChart(display);
     reporter.ReportSmellsChart(display);
     reporter.ReportScanSummary(display.Count, display.Sum(f => f.Sloc), entropy);
-}, scanHerePathArg, scanHereIncludeOption);
+
+    if (savePath is not null)
+    {
+        var json = HtmlReporter.GenerateDataJson(display);
+        File.WriteAllText(savePath, json);
+        AnsiConsole.MarkupLine($"[green]✓[/] Snapshot saved to [cyan]{Markup.Escape(savePath)}[/]");
+    }
+}, scanHerePathArg, scanHereIncludeOption, scanHereSaveOption);
 
 // scan head [repoPath] [--db]
 var scanHeadRepoArg = new Argument<string>("repoPath", () => ".", "Path to the git repository");

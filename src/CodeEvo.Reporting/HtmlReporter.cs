@@ -643,6 +643,19 @@ public class HtmlReporter
     }
 
     /// <summary>
+    /// Serializes an ad hoc (non-git) scan as a snapshot JSON string.
+    /// The result can be compared with other snapshots to track changes over time.
+    /// </summary>
+    public static string GenerateDataJson(IReadOnlyList<FileMetrics> files)
+    {
+        var snapshotHash = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+        var entropy = EntropyCalculator.ComputeEntropy(files);
+        var repoMetrics = new RepoMetrics(snapshotHash, files.Count, files.Sum(f => f.Sloc), entropy);
+        var commitInfo = new CommitInfo(snapshotHash, DateTimeOffset.UtcNow, []);
+        return GenerateDataJson([(commitInfo, repoMetrics)], files);
+    }
+
+    /// <summary>
     /// Serializes the report data to a JSON string that can be saved alongside the HTML report.
     /// The JSON can be used to compare two data points and generate a diff report.
     /// </summary>
