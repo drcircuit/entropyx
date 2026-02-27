@@ -14,6 +14,8 @@ It walks your git history, collects per-file quality signals (SLOC, cyclomatic c
 - [Prerequisites](#prerequisites)
 - [Build](#build)
 - [Publish (self-contained executables)](#publish-self-contained-executables)
+- [Install on macOS/Linux (`/usr/local/bin`)](#install-on-macoslinux-usrlocalbin)
+- [Quickstart (`~/my-git-repo`)](#quickstart-my-git-repo)
 - [Commands](#commands)
   - [scan lang](#scan-lang)
   - [scan here](#scan-here)
@@ -87,6 +89,49 @@ Each profile produces a **self-contained, single-file** native executable — no
 
 The output binary is named `entropyx` (or `entropyx.exe` on Windows).  
 You can copy it to any directory on your `PATH` to use it globally.
+
+---
+
+## Install on macOS/Linux (`/usr/local/bin`)
+
+After publishing for your target platform, `cd` into the output folder that contains the `entropyx` binary, then copy it into `/usr/local/bin` so it is available from any directory:
+
+```sh
+chmod +x entropyx
+mv ./entropyx /usr/local/bin/entropyx
+# if you get a permission error: sudo mv ./entropyx /usr/local/bin/entropyx
+```
+
+Then verify installation and set up missing dependencies:
+
+```sh
+entropyx check tools
+```
+
+If you're on macOS and dependencies are missing, install them with Homebrew:
+
+```sh
+brew install python
+brew install cloc
+brew install lizard-analyzer
+```
+
+---
+
+## Quickstart (`~/my-git-repo`)
+
+```sh
+cd ~/my-git-repo
+
+# Run this first to verify/install required tools (git, cloc)
+entropyx check tools
+
+# Scan full git history into a local database
+entropyx scan full . --db entropyx.db
+
+# Print report summary
+entropyx report . --db entropyx.db
+```
 
 ---
 
