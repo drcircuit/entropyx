@@ -115,7 +115,7 @@ entropyx check tools
 cd ~/my-git-repo
 
 # Run this first to verify/install required tools (git, cloc)
-entropyx check tools .
+entropyx check tools
 
 # Scan full git history into a local database
 entropyx scan full . --db entropyx.db
