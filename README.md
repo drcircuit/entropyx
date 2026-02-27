@@ -94,7 +94,7 @@ You can copy it to any directory on your `PATH` to use it globally.
 
 ## Install on macOS/Linux (`/usr/local/bin`)
 
-After publishing for your target platform, copy the binary into `/usr/local/bin` so it is available from any directory:
+After publishing for your target platform, `cd` into the output folder that contains the `entropyx` binary, then copy it into `/usr/local/bin` so it is available from any directory:
 
 ```sh
 chmod +x entropyx
