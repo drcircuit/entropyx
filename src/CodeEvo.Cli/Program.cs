@@ -157,7 +157,7 @@ var reportDbOption = new Option<string>("--db", () => "entropyx.db", "Path to th
 var reportCommitOption = new Option<string?>("--commit", () => null, "Show metrics for a specific commit hash");
 var reportHtmlOption = new Option<string?>("--html", () => null, "Write a rich HTML report to this file");
 var reportKindOption = new Option<string>("--kind", () => "all", "Filter metrics by code kind: all, production, utility");
-var reportExportFiguresOption = new Option<string?>("--export-figures", () => null, "Export SVG figures to this directory (entropy-over-time.svg, sloc-over-time.svg, sloc-per-file-over-time.svg, cc-over-time.svg, smell-over-time.svg)");
+var reportExportFiguresOption = new Option<string?>("--export-figures", () => null, "Export chart figures (SVG + PNG) to this directory (entropy-over-time, sloc-over-time, sloc-per-file-over-time, cc-over-time, smell-over-time)");
 
 var reportCommand = new Command("report", "Show metrics report");
 reportCommand.AddArgument(reportRepoArg);

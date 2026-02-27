@@ -46,16 +46,16 @@ internal static class ReportCommandHandler
             var jsonOutputPath = Path.ChangeExtension(htmlPath, ".json");
             AnsiConsole.MarkupLine($"[green]✓[/] Data JSON written to [cyan]{Markup.Escape(jsonOutputPath)}[/]");
             if (exportFiguresDir is not null)
-                AnsiConsole.MarkupLine($"[green]✓[/] SVG figures exported to [cyan]{Markup.Escape(exportFiguresDir)}[/]");
+                AnsiConsole.MarkupLine($"[green]✓[/] SVG/PNG figures exported to [cyan]{Markup.Escape(exportFiguresDir)}[/]");
         }
         else if (exportFiguresDir is not null)
         {
-            // Export SVG figures even without --html
+            // Export figures even without --html
             AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
-                .Start($"Exporting SVG figures to {Markup.Escape(exportFiguresDir)}...", _ =>
+                .Start($"Exporting SVG/PNG figures to {Markup.Escape(exportFiguresDir)}...", _ =>
                     ExportFiguresOnly(allMetrics, commitRepo, fileMetricsRepo, kind, exportFiguresDir, repositoryName));
-            AnsiConsole.MarkupLine($"[green]✓[/] SVG figures exported to [cyan]{Markup.Escape(exportFiguresDir)}[/]");
+            AnsiConsole.MarkupLine($"[green]✓[/] SVG/PNG figures exported to [cyan]{Markup.Escape(exportFiguresDir)}[/]");
         }
     }
 

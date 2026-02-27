@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EntropyX Code Health Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --border: #2d3044;
+      --text: #e0e0e0; --muted: #888; --accent: #7c6af7;
+      --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
+      --font: 'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    h1 { font-size: 2rem; font-weight: 700; }
+    h2 { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; }
+    h3 { font-size: 1rem; font-weight: 600; color: var(--muted); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: .05em; }
+    header { padding: 2rem 2.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    header .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 2rem 2.5rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .stat { text-align: center; }
+    .stat .value { font-size: 2.5rem; font-weight: 700; color: var(--accent); }
+    .stat .label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .chart-wrap { position: relative; height: 260px; }
+    .gauge-wrap { position: relative; height: 160px; }
+    .gauge-label { text-align: center; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 0.5rem; }
+    .gauge-value { text-align: center; font-size: 1.4rem; font-weight: 700; color: var(--accent); margin-top: -0.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 0.5rem 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); word-break: break-all; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge-red { background: rgba(239,68,68,.15); color: var(--red); }
+    .badge-green { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge-yellow { background: rgba(245,158,11,.15); color: var(--yellow); }
+    .badge-gray { background: rgba(136,136,136,.15); color: var(--muted); }
+    .delta-pos { color: var(--red); }
+    .delta-neg { color: var(--green); }
+    .delta-zero { color: var(--muted); }
+    section { margin-bottom: 2.5rem; }
+    .empty-msg { color: var(--muted); font-style: italic; padding: 1rem 0; }
+    .commit-hash { font-family: monospace; font-size: 12px; color: var(--muted); }
+    .section-title { font-size: 1.3rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    footer { padding: 1.5rem 2.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+    /* Accordion */
+    details { margin-bottom: 1rem; }
+    details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; background: rgba(124,106,247,.08); border: 1px solid var(--border); border-radius: 8px; color: var(--accent); font-weight: 600; font-size: 0.9rem; user-select: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.7rem; transition: transform .2s; }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details > summary .summary-meta { color: var(--muted); font-weight: 400; font-size: 0.8rem; margin-left: auto; }
+    details .details-body { padding: 1rem 0; }
+    /* Heatmap */
+    .heatmap-row { display: flex; align-items: center; margin-bottom: 3px; font-size: 12px; }
+    .heatmap-swatch { width: 56px; min-width: 56px; height: 22px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: rgba(0,0,0,.75); flex-shrink: 0; }
+    .heatmap-label { flex: 1; padding: 0 0.5rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
+    .heatmap-bar-wrap { width: 120px; min-width: 120px; background: rgba(255,255,255,.05); border-radius: 3px; height: 10px; overflow: hidden; }
+    .heatmap-bar { height: 100%; border-radius: 3px; }
+  </style>
+</head>
+<body>  <header>
+    <div>
+      <h1>🔧 EntropyX Refactor Report</h1>
+      <div class="subtitle">Top 10 files by <strong style="color:var(--accent)">overall</strong> &nbsp;·&nbsp; Generated 2026-02-26 19:29 UTC</div>
+    </div>
+  </header>
+  <div class="container">
+    <section>
+      <div class="card">
+        <h2>📋 Refactor Candidates</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:right">#</th>
+              <th>File</th>
+              <th>Language</th>
+              <th style="text-align:right">SLOC</th>
+              <th style="text-align:right">CC</th>
+              <th style="text-align:right">MI</th>
+              <th style="text-align:right">Smells H/M/L</th>
+              <th style="text-align:right">Coupling</th>
+              <th style="text-align:right">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+        <tr>
+          <td style="text-align:right">1</td>
+          <td>src\CodeEvo.Reporting\ComparisonReporter.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">797 <span class="badge badge-red">Very Large</span></td>
+          <td style="text-align:right">9.3 <span class="badge badge-gray">Low</span></td>
+          <td style="text-align:right">35.5</td>
+          <td style="text-align:right">3/0/0 <span class="badge badge-yellow">Warning</span></td>
+          <td style="text-align:right">4 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(255,255,255)">4.343</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">2</td>
+          <td>src\CodeEvo.Cli\Program.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">585 <span class="badge badge-red">Very Large</span></td>
+          <td style="text-align:right">3.0 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">39.2</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">9 <span class="badge badge-gray">Moderate</span></td>
+          <td style="text-align:right"><span style="color:rgb(245,161,0)">3.107</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">3</td>
+          <td>src\CodeEvo.Reporting\HtmlReporter.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">1,134 <span class="badge badge-red">Very Large</span></td>
+          <td style="text-align:right">3.4 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">32.9</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">5 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(233,188,0)">2.917</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">4</td>
+          <td>src\CodeEvo.Core\ScanPipeline.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">154 <span class="badge badge-gray">Medium</span></td>
+          <td style="text-align:right">7.8 <span class="badge badge-gray">Low</span></td>
+          <td style="text-align:right">51.2</td>
+          <td style="text-align:right">0/1/1 <span class="badge badge-gray">Minor</span></td>
+          <td style="text-align:right">2 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(223,211,0)">2.755</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">5</td>
+          <td>tests\CodeEvo.Tests\HtmlReporterTests.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">734 <span class="badge badge-red">Very Large</span></td>
+          <td style="text-align:right">1.0 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">37.4</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">3 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(51,189,0)">2.294</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">6</td>
+          <td>src\CodeEvo.Reporting\HeatmapImageGenerator.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">111 <span class="badge badge-gray">Medium</span></td>
+          <td style="text-align:right">3.4 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">54.9</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">6 <span class="badge badge-gray">Moderate</span></td>
+          <td style="text-align:right"><span style="color:rgb(44,188,0)">2.278</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">7</td>
+          <td>src\CodeEvo.Reporting\ConsoleReporter.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">421 <span class="badge badge-yellow">Large</span></td>
+          <td style="text-align:right">2.3 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">42.4</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">3 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(37,186,0)">2.261</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">8</td>
+          <td>tests\CodeEvo.Tests\ComparisonReporterTests.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">579 <span class="badge badge-red">Very Large</span></td>
+          <td style="text-align:right">1.1 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">39.6</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">2 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(0,182,21)">2.116</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">9</td>
+          <td>tests\CodeEvo.Tests\EntropyCalculatorTests.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">256 <span class="badge badge-yellow">Large</span></td>
+          <td style="text-align:right">1.1 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">47.3</td>
+          <td style="text-align:right">0/0/0 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">3 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(0,187,79)">1.965</span></td>
+        </tr>
+        <tr>
+          <td style="text-align:right">10</td>
+          <td>src\CodeEvo.Core\EntropyCalculator.cs</td>
+          <td>CSharp</td>
+          <td style="text-align:right">101 <span class="badge badge-gray">Medium</span></td>
+          <td style="text-align:right">4.2 <span class="badge badge-green">Good</span></td>
+          <td style="text-align:right">55.7</td>
+          <td style="text-align:right">0/0/1 <span class="badge badge-green">Clean</span></td>
+          <td style="text-align:right">1 <span class="badge badge-green">Low</span></td>
+          <td style="text-align:right"><span style="color:rgb(0,190,107)">1.891</span></td>
+        </tr>
+      </tbody></table></div></section>
+    <section>
+      <div class="chart-card">
+        <h2>📊 Refactor Priority Score — overall</h2>
+        <div class="chart-wrap" style="height:320px"><canvas id="refactorChart"></canvas></div>
+      </div>
+    </section>
+    <script>
+    (function() {
+      var ctx = document.getElementById('refactorChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ["ComparisonReporter.cs","Program.cs","HtmlReporter.cs","ScanPipeline.cs","HtmlReporterTests.cs","HeatmapImageGenerator.cs","ConsoleReporter.cs","ComparisonReporterTests.cs","EntropyCalculatorTests.cs","EntropyCalculator.cs"],
+          datasets: [{
+            label: 'Refactor Score',
+            data: [4.3431,3.1065,2.9175,2.7555,2.2942,2.2781,2.2613,2.1160,1.9649,1.8908],
+            backgroundColor: 'rgba(239,68,68,0.6)',
+            borderColor: '#ef4444',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#888' } } },
+          scales: {
+            x: { ticks: { color: '#888' }, grid: { color: '#2d3044' }, beginAtZero: true },
+            y: { ticks: { color: '#e0e0e0' }, grid: { color: '#2d3044' } }
+          }
+        }
+      });
+    })();
+    </script>
+  </div>
+  <footer>Generated by <strong>EntropyX</strong> — <a href="https://github.com/drcircuit/entropyx">github.com/drcircuit/entropyx</a></footer>
+</body>
+</html>

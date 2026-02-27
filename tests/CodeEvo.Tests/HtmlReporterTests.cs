@@ -1,6 +1,7 @@
 using CodeEvo.Core.Models;
 using CodeEvo.Reporting;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace CodeEvo.Tests;
@@ -1007,6 +1008,128 @@ public class HtmlReporterTests
 
             var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
             Assert.Contains("entropyx — SLOC Over Time", svg);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExportSvgFigures_WritesPngFiles_ForCoreCharts()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (new CommitInfo("a", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("a", 10, 100, 0.5)),
+                (new CommitInfo("b", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("b", 12, 150, 0.8)),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+
+            Assert.True(File.Exists(Path.Combine(outputDir, "entropy-over-time.png")));
+            Assert.True(File.Exists(Path.Combine(outputDir, "sloc-over-time.png")));
+            Assert.True(File.Exists(Path.Combine(outputDir, "sloc-per-file-over-time.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExportSvgFigures_WithCommitStats_WritesPngFiles_ForCcAndSmellCharts()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var c1 = new CommitInfo("a", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), []);
+            var c2 = new CommitInfo("b", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero), []);
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (c1, new RepoMetrics("a", 10, 100, 0.5)),
+                (c2, new RepoMetrics("b", 12, 150, 0.8)),
+            };
+            var stats = new List<HtmlReporter.CommitFileStats>
+            {
+                new(c1, 1.2, 0.3, 10),
+                new(c2, 1.5, 0.4, 12),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history, stats);
+
+            Assert.True(File.Exists(Path.Combine(outputDir, "cc-over-time.png")));
+            Assert.True(File.Exists(Path.Combine(outputDir, "smell-over-time.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExportSvgFigures_SlocAxisTicks_AreNotKPrefixed()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (new CommitInfo("a", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("a", 10, 553, 0.5)),
+                (new CommitInfo("b", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("b", 12, 30_151, 0.8)),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+            Assert.DoesNotContain("k</text>", svg);
+
+            var tickMatches = Regex.Matches(svg, "<text x=\"66\" y=\"[^\"]+\" text-anchor=\"end\" fill=\"#888\" font-family=\"Segoe UI,sans-serif\" font-size=\"11\">([^<]+)</text>");
+            Assert.NotEmpty(tickMatches);
+            Assert.Contains(tickMatches.Select(m => m.Groups[1].Value), t => t.Contains(','));
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir))
+                Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExportSvgFigures_SlocAxisRange_MatchesDataMagnitude()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"entropyx-svg-{Guid.NewGuid():N}");
+
+        try
+        {
+            var history = new List<(CommitInfo, RepoMetrics)>
+            {
+                (new CommitInfo("a", new DateTimeOffset(2024, 12, 18, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("a", 1, 553, 0.0)),
+                (new CommitInfo("b", new DateTimeOffset(2026, 2, 8, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("b", 72, 121_157, 0.8)),
+                (new CommitInfo("c", new DateTimeOffset(2026, 2, 24, 0, 0, 0, TimeSpan.Zero), []), new RepoMetrics("c", 99, 7_198, 1.14)),
+            };
+
+            HtmlReporter.ExportSvgFigures(outputDir, history);
+
+            var svg = File.ReadAllText(Path.Combine(outputDir, "sloc-over-time.svg"));
+            var tickMatches = Regex.Matches(svg, "<text x=\"66\" y=\"[^\"]+\" text-anchor=\"end\" fill=\"#888\" font-family=\"Segoe UI,sans-serif\" font-size=\"11\">([^<]+)</text>");
+            Assert.NotEmpty(tickMatches);
+
+            var maxTick = tickMatches
+                .Select(m => m.Groups[1].Value)
+                .Select(t => t.Replace(",", ""))
+                .Select(t => double.Parse(t, CultureInfo.InvariantCulture))
+                .Max();
+
+            Assert.InRange(maxTick, 120_000, 500_000);
         }
         finally
         {

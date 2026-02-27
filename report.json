@@ -1,0 +1,1401 @@
+{
+  "generated": "2026-02-26T21:39:35.0350555\u002B00:00",
+  "commitCount": 98,
+  "summary": {
+    "entropy": 1.4073292879328216,
+    "files": 54,
+    "sloc": 7937
+  },
+  "history": [
+    {
+      "hash": "e94ad454e0413bec82a45ef38cbd2b4b3e72d0b8",
+      "date": "2026-02-26",
+      "entropy": 0,
+      "files": 0,
+      "sloc": 0
+    },
+    {
+      "hash": "cd2d350a3fd796d499889528a873cf9bb6d0244d",
+      "date": "2026-02-26",
+      "entropy": 0,
+      "files": 0,
+      "sloc": 0
+    },
+    {
+      "hash": "3452700906a351e490230b3fafbc7d62b2cbc3e4",
+      "date": "2026-02-26",
+      "entropy": 1.706636238759034,
+      "files": 26,
+      "sloc": 892
+    },
+    {
+      "hash": "e3739afa09f694bf8b9e717c4b4270d28abcd14a",
+      "date": "2026-02-26",
+      "entropy": 1.706636238759034,
+      "files": 26,
+      "sloc": 892
+    },
+    {
+      "hash": "9a5f67aa61ef7244967fbfc5deaf04d7bdf4f2a0",
+      "date": "2026-02-26",
+      "entropy": 1.6194181107122336,
+      "files": 27,
+      "sloc": 1118
+    },
+    {
+      "hash": "262ace9c91f0980a0d339e5bf54969f051c39b13",
+      "date": "2026-02-26",
+      "entropy": 1.6224988106981442,
+      "files": 27,
+      "sloc": 1179
+    },
+    {
+      "hash": "3a21058357e6641fc094ecdb6a47348c50ac59c8",
+      "date": "2026-02-26",
+      "entropy": 1.6326434790527016,
+      "files": 27,
+      "sloc": 1226
+    },
+    {
+      "hash": "16f7526c19da69acfc7ea41ae9ad1bf92130b399",
+      "date": "2026-02-26",
+      "entropy": 1.6326434790527016,
+      "files": 27,
+      "sloc": 1226
+    },
+    {
+      "hash": "173e5fe46e01217061dc6c1fcb4dd97b0d1379a4",
+      "date": "2026-02-26",
+      "entropy": 1.6326434790527016,
+      "files": 27,
+      "sloc": 1226
+    },
+    {
+      "hash": "b5a94e4a526cbdd6d96b5007f25bc4222599d4c7",
+      "date": "2026-02-26",
+      "entropy": 1.6302829377354704,
+      "files": 27,
+      "sloc": 1224
+    },
+    {
+      "hash": "479d9f696ee58944b7f28d2f1409127be96c4a99",
+      "date": "2026-02-26",
+      "entropy": 1.4846258616392336,
+      "files": 31,
+      "sloc": 1264
+    },
+    {
+      "hash": "5043b49a01f7b4105cbd6f4125d0327cc1464f79",
+      "date": "2026-02-26",
+      "entropy": 1.4846258616392336,
+      "files": 31,
+      "sloc": 1264
+    },
+    {
+      "hash": "d22725a16eb11a658e8e7ab8a3f37ef877b19d6a",
+      "date": "2026-02-26",
+      "entropy": 1.4846258616392336,
+      "files": 31,
+      "sloc": 1264
+    },
+    {
+      "hash": "482761ea060fba20df4082843f7e65f8d14cd3b4",
+      "date": "2026-02-26",
+      "entropy": 1.4667092561278672,
+      "files": 32,
+      "sloc": 1374
+    },
+    {
+      "hash": "dc97e1f79af51b00566783df3e931bb49bb6759b",
+      "date": "2026-02-26",
+      "entropy": 1.443131480378652,
+      "files": 34,
+      "sloc": 1586
+    },
+    {
+      "hash": "1eebf539a2d2592c9a5e374016f8f13ea489f8e2",
+      "date": "2026-02-26",
+      "entropy": 1.443131480378652,
+      "files": 34,
+      "sloc": 1586
+    },
+    {
+      "hash": "8700577c02efda3ae8a78dd7b61714ac353fa694",
+      "date": "2026-02-26",
+      "entropy": 1.450614856441894,
+      "files": 34,
+      "sloc": 1591
+    },
+    {
+      "hash": "cece64278f72f874e30d13b0eb446c3c69bb4664",
+      "date": "2026-02-26",
+      "entropy": 1.450614856441894,
+      "files": 34,
+      "sloc": 1591
+    },
+    {
+      "hash": "d77416ec36b5e75203858646688c5a1516c0fae6",
+      "date": "2026-02-26",
+      "entropy": 1.450614856441894,
+      "files": 34,
+      "sloc": 1591
+    },
+    {
+      "hash": "286fca9090db9743f96b2ff88af314676ee4aa95",
+      "date": "2026-02-26",
+      "entropy": 1.4930998954378554,
+      "files": 37,
+      "sloc": 1764
+    },
+    {
+      "hash": "96c856317928443bd317ad5bebac85085dd5a596",
+      "date": "2026-02-26",
+      "entropy": 1.4930998954378554,
+      "files": 37,
+      "sloc": 1764
+    },
+    {
+      "hash": "b34d7dfcff9f13bf36755fcf27b75fd25fcc7929",
+      "date": "2026-02-26",
+      "entropy": 1.4930998954378554,
+      "files": 37,
+      "sloc": 1764
+    },
+    {
+      "hash": "fafa0dbb9e121c887cc71aca8e69d98d709af820",
+      "date": "2026-02-26",
+      "entropy": 1.4930998954378554,
+      "files": 37,
+      "sloc": 1764
+    },
+    {
+      "hash": "fba8ee9668bf1fb7788e327b4b7882a17eb6da2f",
+      "date": "2026-02-26",
+      "entropy": 1.5018365856689255,
+      "files": 37,
+      "sloc": 1818
+    },
+    {
+      "hash": "d9ba7e9201f14e4f0a83a9978e665f7afaab294a",
+      "date": "2026-02-26",
+      "entropy": 1.5030173103177382,
+      "files": 37,
+      "sloc": 1839
+    },
+    {
+      "hash": "b1b6f6ff215404fca645ed1c5fdf9a7454796f54",
+      "date": "2026-02-26",
+      "entropy": 1.4930998954378554,
+      "files": 37,
+      "sloc": 1764
+    },
+    {
+      "hash": "a03b2d3029f08381847081a8a9001f1221d0c82c",
+      "date": "2026-02-26",
+      "entropy": 1.5280962838735175,
+      "files": 39,
+      "sloc": 2090
+    },
+    {
+      "hash": "5f52acd0eaebf991247344e132b151c60b89aed5",
+      "date": "2026-02-26",
+      "entropy": 1.5048643366419043,
+      "files": 37,
+      "sloc": 1850
+    },
+    {
+      "hash": "ce44513a6bb5d5d6420d702c1528608821f63c4b",
+      "date": "2026-02-26",
+      "entropy": 1.4238545677863812,
+      "files": 39,
+      "sloc": 2511
+    },
+    {
+      "hash": "abb8bec1e9a9c869591c0bf0a49d3626a1bba982",
+      "date": "2026-02-26",
+      "entropy": 1.505905838824671,
+      "files": 37,
+      "sloc": 1890
+    },
+    {
+      "hash": "485691deda9816dad6fef5c12b8cd442fedd3617",
+      "date": "2026-02-26",
+      "entropy": 1.505905838824671,
+      "files": 37,
+      "sloc": 1890
+    },
+    {
+      "hash": "028e65cf51be5daca2d8aa4d34cbe8e3bb6da172",
+      "date": "2026-02-26",
+      "entropy": 1.437685124272086,
+      "files": 39,
+      "sloc": 2637
+    },
+    {
+      "hash": "d07c3876a6373abf6b3e686cb48f82826e24561c",
+      "date": "2026-02-26",
+      "entropy": 1.4911757899127511,
+      "files": 41,
+      "sloc": 2963
+    },
+    {
+      "hash": "5c120d620e64a62d932d37f9edc382452c34ec4d",
+      "date": "2026-02-26",
+      "entropy": 1.4911757899127511,
+      "files": 41,
+      "sloc": 2963
+    },
+    {
+      "hash": "d7d66ecfbc2283ee8b91fd30a6cd62489b790ac8",
+      "date": "2026-02-26",
+      "entropy": 1.502639694143619,
+      "files": 41,
+      "sloc": 3053
+    },
+    {
+      "hash": "f7617116990838064e1aec4ed4af5ae5858341fe",
+      "date": "2026-02-26",
+      "entropy": 1.4911757899127511,
+      "files": 41,
+      "sloc": 2963
+    },
+    {
+      "hash": "9cc9bfe51d04bd04210f39cce53354bdd378ea08",
+      "date": "2026-02-26",
+      "entropy": 1.502639694143619,
+      "files": 41,
+      "sloc": 3053
+    },
+    {
+      "hash": "44fe9c0d61d34d528e33f7d6e6821e8ca58f5db0",
+      "date": "2026-02-26",
+      "entropy": 1.5020275198828275,
+      "files": 42,
+      "sloc": 3356
+    },
+    {
+      "hash": "fd5bd55f9e64846e536f6eb2b5b15f34750c6e40",
+      "date": "2026-02-26",
+      "entropy": 1.513229879293887,
+      "files": 42,
+      "sloc": 3446
+    },
+    {
+      "hash": "27cfe84b630bd188261221ca0012beedbf62baa9",
+      "date": "2026-02-26",
+      "entropy": 1.4303354001370576,
+      "files": 41,
+      "sloc": 3344
+    },
+    {
+      "hash": "d9e45eb0642c2a5446d65c016773ad98f10ad5da",
+      "date": "2026-02-26",
+      "entropy": 1.4003821033367945,
+      "files": 42,
+      "sloc": 3583
+    },
+    {
+      "hash": "f784ef5b27c958c82930b5d3e1582b9ab84c4a9d",
+      "date": "2026-02-26",
+      "entropy": 1.4057417861651826,
+      "files": 42,
+      "sloc": 3674
+    },
+    {
+      "hash": "c940d1ddfec7d0e3361d613e8b06038e46523a50",
+      "date": "2026-02-26",
+      "entropy": 1.4057417861651826,
+      "files": 42,
+      "sloc": 3674
+    },
+    {
+      "hash": "9ca2778e205a177b01e15910a0ff98c751692da2",
+      "date": "2026-02-26",
+      "entropy": 1.415171519105859,
+      "files": 43,
+      "sloc": 4071
+    },
+    {
+      "hash": "b4d3ddf74a3e784c9b2df9e996a1da7d3f7e9404",
+      "date": "2026-02-26",
+      "entropy": 1.4150711572055263,
+      "files": 43,
+      "sloc": 4066
+    },
+    {
+      "hash": "82fa2347a379347656dc7f63b95f280f18863e10",
+      "date": "2026-02-26",
+      "entropy": 1.4150711572055263,
+      "files": 43,
+      "sloc": 4066
+    },
+    {
+      "hash": "e482e4bca24780d8542ea559dfc3c3b1ef8655c2",
+      "date": "2026-02-26",
+      "entropy": 1.4150711572055263,
+      "files": 43,
+      "sloc": 4066
+    },
+    {
+      "hash": "b0ea6ed7a1a4fb50be210a6f81ec486217959369",
+      "date": "2026-02-26",
+      "entropy": 1.4211532362163333,
+      "files": 44,
+      "sloc": 4151
+    },
+    {
+      "hash": "7a36608e1e4cce13307a2b66ed5af2ab87008ae6",
+      "date": "2026-02-26",
+      "entropy": 1.412335550853958,
+      "files": 45,
+      "sloc": 5130
+    },
+    {
+      "hash": "db88bae3a94d0bbdc43f236eac4e6b9ce850b6db",
+      "date": "2026-02-26",
+      "entropy": 1.4406549386660348,
+      "files": 45,
+      "sloc": 4362
+    },
+    {
+      "hash": "2953776b35f511e533e24e0c5409579da09389e9",
+      "date": "2026-02-26",
+      "entropy": 1.4260595863811272,
+      "files": 45,
+      "sloc": 5442
+    },
+    {
+      "hash": "b97989f581d26ee74803a2b76ffb4620ee084cab",
+      "date": "2026-02-26",
+      "entropy": 1.4406549386660348,
+      "files": 45,
+      "sloc": 4362
+    },
+    {
+      "hash": "c9aea79b3a69e431c24fd4d8d5817448d9de7d1a",
+      "date": "2026-02-26",
+      "entropy": 1.4473027517310981,
+      "files": 47,
+      "sloc": 5738
+    },
+    {
+      "hash": "d9f71a6e5f9fb16601e75913ba35b59c55b0b5be",
+      "date": "2026-02-26",
+      "entropy": 1.4406549386660348,
+      "files": 45,
+      "sloc": 4362
+    },
+    {
+      "hash": "136af60eaa984cdb3a809ace6ee84892366577a7",
+      "date": "2026-02-26",
+      "entropy": 1.4397202620623797,
+      "files": 45,
+      "sloc": 4425
+    },
+    {
+      "hash": "ff59a5c07def5533b1ac1079f9e8e45d351a46ac",
+      "date": "2026-02-26",
+      "entropy": 1.4397202620623797,
+      "files": 45,
+      "sloc": 4425
+    },
+    {
+      "hash": "d4485afd8c923ec4323782148398374da4d7f7ce",
+      "date": "2026-02-26",
+      "entropy": 1.448395324937436,
+      "files": 47,
+      "sloc": 5801
+    },
+    {
+      "hash": "52c0fc3ee103387944d6552a11b156d1098f5822",
+      "date": "2026-02-26",
+      "entropy": 1.448395324937436,
+      "files": 47,
+      "sloc": 5801
+    },
+    {
+      "hash": "a9c0b7f05600d2cc8719e4d837554773f652f864",
+      "date": "2026-02-26",
+      "entropy": 1.43200798181475,
+      "files": 47,
+      "sloc": 6301
+    },
+    {
+      "hash": "1298ab6528a1b4205759f9995efbe69109332cca",
+      "date": "2026-02-26",
+      "entropy": 1.43200798181475,
+      "files": 47,
+      "sloc": 6301
+    },
+    {
+      "hash": "722966e1f9621ac1ae0dd3b30c2d42718f4a0a08",
+      "date": "2026-02-26",
+      "entropy": 1.43200798181475,
+      "files": 47,
+      "sloc": 6301
+    },
+    {
+      "hash": "b233fd6cf0da9a1ae782ab323d33a3bb39d8b646",
+      "date": "2026-02-26",
+      "entropy": 1.4374590810446344,
+      "files": 48,
+      "sloc": 6382
+    },
+    {
+      "hash": "cb44fd72b7fbe7969893f7a81cfe27c8a88814a3",
+      "date": "2026-02-26",
+      "entropy": 1.4374590810446344,
+      "files": 48,
+      "sloc": 6382
+    },
+    {
+      "hash": "476f227341eea231f3b9e4c6f2d19ba3abb475c8",
+      "date": "2026-02-26",
+      "entropy": 1.4374590810446344,
+      "files": 48,
+      "sloc": 6382
+    },
+    {
+      "hash": "c72e2f9de38c36ebbc6c5567d7560085bcfff475",
+      "date": "2026-02-26",
+      "entropy": 1.4148721491689151,
+      "files": 49,
+      "sloc": 6525
+    },
+    {
+      "hash": "7e85619b2fe063ef3cb0a40c0debbc8009770cea",
+      "date": "2026-02-26",
+      "entropy": 1.4374590810446344,
+      "files": 48,
+      "sloc": 6382
+    },
+    {
+      "hash": "c134da905e6924288f6d03cfaf08eee5bb6d2b32",
+      "date": "2026-02-26",
+      "entropy": 1.4365646492721675,
+      "files": 48,
+      "sloc": 6460
+    },
+    {
+      "hash": "0beeb8cf033e764c24ea7a3189dad9fe8e140fa4",
+      "date": "2026-02-26",
+      "entropy": 1.4148721491689151,
+      "files": 49,
+      "sloc": 6525
+    },
+    {
+      "hash": "ca23f474a1d768895b35eb443b653150f1fadfea",
+      "date": "2026-02-26",
+      "entropy": 1.4139672611481244,
+      "files": 49,
+      "sloc": 6603
+    },
+    {
+      "hash": "a9a7e944602d809c231e58c2d9908eb9751f7422",
+      "date": "2026-02-26",
+      "entropy": 1.4139672611481244,
+      "files": 49,
+      "sloc": 6603
+    },
+    {
+      "hash": "a3286c0b3955fa94c8cdd5335043f66536b2ba30",
+      "date": "2026-02-26",
+      "entropy": 1.4139672611481244,
+      "files": 49,
+      "sloc": 6603
+    },
+    {
+      "hash": "1127221e648bbeeb246070e8ddb8a6f4c84948f3",
+      "date": "2026-02-26",
+      "entropy": 1.4139672611481244,
+      "files": 49,
+      "sloc": 6603
+    },
+    {
+      "hash": "543587814392afd3041fbecadd7808946a133ba2",
+      "date": "2026-02-26",
+      "entropy": 1.4139672611481244,
+      "files": 49,
+      "sloc": 6603
+    },
+    {
+      "hash": "f3c0d311d34757bb21463aa06b7a371082a82cc6",
+      "date": "2026-02-26",
+      "entropy": 1.4180761782594147,
+      "files": 49,
+      "sloc": 6628
+    },
+    {
+      "hash": "4642b8cf4ceb6884c2003ed5532c6e7f38fbc54f",
+      "date": "2026-02-26",
+      "entropy": 1.4180761782594147,
+      "files": 49,
+      "sloc": 6628
+    },
+    {
+      "hash": "d74518797f26dd5cb7cc56cfdf9c49db14fea338",
+      "date": "2026-02-26",
+      "entropy": 1.4180761782594147,
+      "files": 49,
+      "sloc": 6628
+    },
+    {
+      "hash": "dffd4216ace9bc1af11c3bab5afd1708865f580e",
+      "date": "2026-02-26",
+      "entropy": 1.4237898175617247,
+      "files": 51,
+      "sloc": 6793
+    },
+    {
+      "hash": "25b18f8fc63bf3b1a9fdb13187f836f1e7cf75ee",
+      "date": "2026-02-26",
+      "entropy": 1.4237898175617247,
+      "files": 51,
+      "sloc": 6793
+    },
+    {
+      "hash": "3658ed9dca56e9b08d03ca14c2a7dfd0a774437d",
+      "date": "2026-02-26",
+      "entropy": 1.4237898175617247,
+      "files": 51,
+      "sloc": 6793
+    },
+    {
+      "hash": "c63a74cc65385a0b007c23158fc728ff0918a0f0",
+      "date": "2026-02-26",
+      "entropy": 1.4190427420908331,
+      "files": 51,
+      "sloc": 6909
+    },
+    {
+      "hash": "9a94c65ef2ac8ce54b18c768dcddab0f99fbefd5",
+      "date": "2026-02-26",
+      "entropy": 1.4190427420908331,
+      "files": 51,
+      "sloc": 6909
+    },
+    {
+      "hash": "9a6d721dc505e194e49d114e1591c50e92f45a44",
+      "date": "2026-02-26",
+      "entropy": 1.4190427420908331,
+      "files": 51,
+      "sloc": 6909
+    },
+    {
+      "hash": "ac5eb1bb1b39e167a423744d83014442c794f7f3",
+      "date": "2026-02-26",
+      "entropy": 1.4143376620042019,
+      "files": 51,
+      "sloc": 7026
+    },
+    {
+      "hash": "8afe6cca5ef3b401e9577db8510a7867ad5521e0",
+      "date": "2026-02-26",
+      "entropy": 1.4143376620042019,
+      "files": 51,
+      "sloc": 7026
+    },
+    {
+      "hash": "5ad4590f1a923239213fd716fb9e0c6a084de188",
+      "date": "2026-02-26",
+      "entropy": 1.4143376620042019,
+      "files": 51,
+      "sloc": 7026
+    },
+    {
+      "hash": "9ca4d9f7515428c279d31febe77085aad9e402bd",
+      "date": "2026-02-26",
+      "entropy": 1.4094523723458934,
+      "files": 51,
+      "sloc": 7473
+    },
+    {
+      "hash": "8e3748bc13966486035eaa99e5997d51cfea40de",
+      "date": "2026-02-26",
+      "entropy": 1.4094523723458934,
+      "files": 51,
+      "sloc": 7473
+    },
+    {
+      "hash": "c6d6ed5f668eb0c3c951cdab52d3aafeb661c3c9",
+      "date": "2026-02-26",
+      "entropy": 1.4094523723458934,
+      "files": 51,
+      "sloc": 7473
+    },
+    {
+      "hash": "58af382f04ca59b496647d0db8c3154113ff4601",
+      "date": "2026-02-26",
+      "entropy": 1.4565043747483242,
+      "files": 54,
+      "sloc": 7515
+    },
+    {
+      "hash": "38e8c23accdf317eb7e9347410085582d3586ae1",
+      "date": "2026-02-26",
+      "entropy": 1.4565043747483242,
+      "files": 54,
+      "sloc": 7515
+    },
+    {
+      "hash": "6e2533b56ae3957aedb2fb812f184ddbe709da91",
+      "date": "2026-02-26",
+      "entropy": 1.4565043747483242,
+      "files": 54,
+      "sloc": 7515
+    },
+    {
+      "hash": "d947afd01ff74788a873acbe394ee207befa06f1",
+      "date": "2026-02-26",
+      "entropy": 1.455367208674826,
+      "files": 54,
+      "sloc": 7437
+    },
+    {
+      "hash": "ee4a4cf938c6b0376a8ee6892daaaeebc50eb219",
+      "date": "2026-02-26",
+      "entropy": 1.4554941800433434,
+      "files": 54,
+      "sloc": 7458
+    },
+    {
+      "hash": "819bf1bdcaed714e7eec9ee35e13f16e9c8cb53c",
+      "date": "2026-02-26",
+      "entropy": 1.4554941800433434,
+      "files": 54,
+      "sloc": 7458
+    },
+    {
+      "hash": "87d52ec0679a45212c0062138f97b5bc36df0ffc",
+      "date": "2026-02-26",
+      "entropy": 1.4554941800433434,
+      "files": 54,
+      "sloc": 7458
+    },
+    {
+      "hash": "4248f992080d106dc44f411dcb7089a8f6cc5731",
+      "date": "2026-02-26",
+      "entropy": 1.4265448600082868,
+      "files": 54,
+      "sloc": 7732
+    },
+    {
+      "hash": "c6647fb686227c16ec73fca37a934cc7e58a12c2",
+      "date": "2026-02-26",
+      "entropy": 1.4073292879328216,
+      "files": 54,
+      "sloc": 7937
+    },
+    {
+      "hash": "749e74a6ac41ac1aaaf0804ba9099184ccdc56ad",
+      "date": "2026-02-26",
+      "entropy": 1.4073292879328216,
+      "files": 54,
+      "sloc": 7937
+    }
+  ],
+  "latestFiles": [
+    {
+      "path": "EntropyX.sln",
+      "language": "",
+      "sloc": 115,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 55.04801141550605,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 1.1948468693198435,
+      "kind": "Production"
+    },
+    {
+      "path": "heatmap.png",
+      "language": "",
+      "sloc": 392,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 43.43015099145878,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 1.5747412440059905,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Adapters/CodeEvo.Adapters.csproj",
+      "language": "",
+      "sloc": 10,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 78.18603596110903,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4501823444001345,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Adapters/LizardAnalyzer.cs",
+      "language": "CSharp",
+      "sloc": 76,
+      "cyclomaticComplexity": 4.666666666666667,
+      "maintainabilityIndex": 58.344319622238665,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.8004774412678601,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Adapters/ToolProcurement.cs",
+      "language": "CSharp",
+      "sloc": 50,
+      "cyclomaticComplexity": 2.3333333333333335,
+      "maintainabilityIndex": 62.624889266314256,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.4158410014332135,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Adapters/ToolRunner.cs",
+      "language": "CSharp",
+      "sloc": 22,
+      "cyclomaticComplexity": 2,
+      "maintainabilityIndex": 70.44743406759957,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 1,
+      "badness": 1.017173498249727,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/CliHelpers.cs",
+      "language": "CSharp",
+      "sloc": 133,
+      "cyclomaticComplexity": 3,
+      "maintainabilityIndex": 53.26686790807461,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 8,
+      "badness": 2.457432893876155,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/CodeEvo.Cli.csproj",
+      "language": "",
+      "sloc": 17,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 73.15903147736216,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.6088740551214273,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/Program.cs",
+      "language": "CSharp",
+      "sloc": 338,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 44.83430204279245,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 9,
+      "badness": 2.5287734877755943,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/Properties/PublishProfiles/linux-x64.pubxml",
+      "language": "",
+      "sloc": 11,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 77.28309741559438,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4784545587249728,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/Properties/PublishProfiles/osx-arm64.pubxml",
+      "language": "",
+      "sloc": 11,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 77.28309741559438,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4784545587249728,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/Properties/PublishProfiles/osx-x64.pubxml",
+      "language": "",
+      "sloc": 11,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 77.28309741559438,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4784545587249728,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/Properties/PublishProfiles/win-x64.pubxml",
+      "language": "",
+      "sloc": 11,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 77.28309741559438,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4784545587249728,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/ReportCommandHandler.cs",
+      "language": "CSharp",
+      "sloc": 147,
+      "cyclomaticComplexity": 4.4,
+      "maintainabilityIndex": 52.13040473344122,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 5,
+      "badness": 2.3084724938861303,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Cli/ScanDetailsCommandHandler.cs",
+      "language": "CSharp",
+      "sloc": 67,
+      "cyclomaticComplexity": 7,
+      "maintainabilityIndex": 59.22454945372301,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 6,
+      "badness": 2.4617269159214406,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/CodeEvo.Core.csproj",
+      "language": "",
+      "sloc": 10,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 78.18603596110903,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4501823444001345,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/CouplingCounter.cs",
+      "language": "CSharp",
+      "sloc": 42,
+      "cyclomaticComplexity": 4.5,
+      "maintainabilityIndex": 63.985235195210194,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 1.3774745343260237,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/EntropyCalculator.cs",
+      "language": "CSharp",
+      "sloc": 113,
+      "cyclomaticComplexity": 4,
+      "maintainabilityIndex": 54.67620896892402,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 1,
+      "couplingProxy": 1,
+      "badness": 1.8499386931461688,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/GitTraversal.cs",
+      "language": "CSharp",
+      "sloc": 118,
+      "cyclomaticComplexity": 3.7142857142857144,
+      "maintainabilityIndex": 54.30445811074299,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.832019536483272,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/ILizardAnalyzer.cs",
+      "language": "CSharp",
+      "sloc": 10,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 78.18603596110903,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.4501823444001345,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/LanguageDetector.cs",
+      "language": "CSharp",
+      "sloc": 20,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 71.48487553709084,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.7675823331801708,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/Models/CodeKind.cs",
+      "language": "CSharp",
+      "sloc": 6,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 83.02543660731315,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.30095455978573343,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/Models/CommitInfo.cs",
+      "language": "CSharp",
+      "sloc": 2,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 93.43334249995841,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/Models/FileMetrics.cs",
+      "language": "CSharp",
+      "sloc": 14,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 74.9984042457502,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.5504686293647386,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/Models/RepoMetrics.cs",
+      "language": "CSharp",
+      "sloc": 2,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 93.43334249995841,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/ScanFilter.cs",
+      "language": "CSharp",
+      "sloc": 92,
+      "cyclomaticComplexity": 3.111111111111111,
+      "maintainabilityIndex": 56.74354941301168,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 1.466783228800176,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/ScanPipeline.cs",
+      "language": "CSharp",
+      "sloc": 154,
+      "cyclomaticComplexity": 7.8,
+      "maintainabilityIndex": 51.232378854327024,
+      "smellsHigh": 0,
+      "smellsMedium": 1,
+      "smellsLow": 1,
+      "couplingProxy": 2,
+      "badness": 2.695421425059134,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Core/SlocCounter.cs",
+      "language": "CSharp",
+      "sloc": 35,
+      "cyclomaticComplexity": 6,
+      "maintainabilityIndex": 65.51073766308275,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 1,
+      "couplingProxy": 0,
+      "badness": 1.5970637905629872,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Reporting/CodeEvo.Reporting.csproj",
+      "language": "",
+      "sloc": 13,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 75.70047977141701,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.5282714679088143,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Reporting/ComparisonReporter.cs",
+      "language": "CSharp",
+      "sloc": 768,
+      "cyclomaticComplexity": 9.307692307692308,
+      "maintainabilityIndex": 35.806922276162865,
+      "smellsHigh": 3,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 4,
+      "badness": 4.247736092331069,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Reporting/ConsoleReporter.cs",
+      "language": "CSharp",
+      "sloc": 393,
+      "cyclomaticComplexity": 2.107142857142857,
+      "maintainabilityIndex": 43.12259732782171,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 2.1397518816363412,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Reporting/HeatmapImageGenerator.cs",
+      "language": "CSharp",
+      "sloc": 111,
+      "cyclomaticComplexity": 3.4,
+      "maintainabilityIndex": 54.92608815131004,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 6,
+      "badness": 2.2231181273345695,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Reporting/HtmlReporter.cs",
+      "language": "CSharp",
+      "sloc": 1543,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 30.449100346033212,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 5,
+      "badness": 2.5555555555555554,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Storage/CodeEvo.Storage.csproj",
+      "language": "",
+      "sloc": 12,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 76.45877910727158,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.5043623761495812,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Storage/CommitRepository.cs",
+      "language": "CSharp",
+      "sloc": 46,
+      "cyclomaticComplexity": 1.3333333333333333,
+      "maintainabilityIndex": 63.54932322234502,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.280643709312797,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Storage/DatabaseContext.cs",
+      "language": "CSharp",
+      "sloc": 99,
+      "cyclomaticComplexity": 1.3333333333333333,
+      "maintainabilityIndex": 56.287948398335075,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 1,
+      "badness": 1.4057503560633138,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Storage/FileMetricsRepository.cs",
+      "language": "CSharp",
+      "sloc": 70,
+      "cyclomaticComplexity": 2,
+      "maintainabilityIndex": 59.482091858947584,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.4829181086824175,
+      "kind": "Production"
+    },
+    {
+      "path": "src/CodeEvo.Storage/RepoMetricsRepository.cs",
+      "language": "CSharp",
+      "sloc": 43,
+      "cyclomaticComplexity": 1.3333333333333333,
+      "maintainabilityIndex": 64.18824061935534,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.2599353972619314,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/CodeEvo.Tests.csproj",
+      "language": "",
+      "sloc": 22,
+      "cyclomaticComplexity": 0,
+      "maintainabilityIndex": 70.7164399155528,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 0,
+      "badness": 0.6869153517037605,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/ComparisonReporterTests.cs",
+      "language": "CSharp",
+      "sloc": 579,
+      "cyclomaticComplexity": 1.0909090909090908,
+      "maintainabilityIndex": 39.58829869731484,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 2.037505212401075,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/CouplingCounterTests.cs",
+      "language": "CSharp",
+      "sloc": 120,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 54.510312144404026,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.5398032175811283,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/DatabaseContextClearTests.cs",
+      "language": "CSharp",
+      "sloc": 88,
+      "cyclomaticComplexity": 1.1,
+      "maintainabilityIndex": 57.435171699095356,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 1.5660244943236314,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/EntropyCalculatorTests.cs",
+      "language": "CSharp",
+      "sloc": 256,
+      "cyclomaticComplexity": 1.1153846153846154,
+      "maintainabilityIndex": 47.31671750753955,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 1.8981744199364101,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/GitTraversalRepoInfoTests.cs",
+      "language": "CSharp",
+      "sloc": 66,
+      "cyclomaticComplexity": 1.1428571428571428,
+      "maintainabilityIndex": 60.15481639550571,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 1.481971061125143,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/GitTraversalTests.cs",
+      "language": "CSharp",
+      "sloc": 168,
+      "cyclomaticComplexity": 1.2142857142857142,
+      "maintainabilityIndex": 51.293858373907305,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 1.778517149753554,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/HeatmapTests.cs",
+      "language": "CSharp",
+      "sloc": 118,
+      "cyclomaticComplexity": 1.1538461538461537,
+      "maintainabilityIndex": 54.64884471828749,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 4,
+      "badness": 1.7736853891652675,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/HtmlReporterTests.cs",
+      "language": "CSharp",
+      "sloc": 734,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 37.35330627862273,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 3,
+      "badness": 2.2122682936813383,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/LanguageDetectorTests.cs",
+      "language": "CSharp",
+      "sloc": 30,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 67.6436271444872,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.1131710494121383,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/LizardAnalyzerTests.cs",
+      "language": "CSharp",
+      "sloc": 72,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 59.34971279060814,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.382031216647459,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/ScanFilterTests.cs",
+      "language": "CSharp",
+      "sloc": 202,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 49.57664520590673,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.7010073827594496,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/ScanPipelineScanCommitTests.cs",
+      "language": "CSharp",
+      "sloc": 99,
+      "cyclomaticComplexity": 1.125,
+      "maintainabilityIndex": 56.315969840830206,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 4,
+      "badness": 1.7162558732055162,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/ScanPipelineTests.cs",
+      "language": "CSharp",
+      "sloc": 130,
+      "cyclomaticComplexity": 1.2307692307692308,
+      "maintainabilityIndex": 53.72097367224716,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.589847194605202,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/SlocCounterTests.cs",
+      "language": "CSharp",
+      "sloc": 71,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 59.48221403036884,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.3777182739133436,
+      "kind": "Production"
+    },
+    {
+      "path": "tests/CodeEvo.Tests/ToolProcurementTests.cs",
+      "language": "CSharp",
+      "sloc": 55,
+      "cyclomaticComplexity": 1,
+      "maintainabilityIndex": 61.90128795276841,
+      "smellsHigh": 0,
+      "smellsMedium": 0,
+      "smellsLow": 0,
+      "couplingProxy": 2,
+      "badness": 1.29905862302052,
+      "kind": "Production"
+    }
+  ]
+}

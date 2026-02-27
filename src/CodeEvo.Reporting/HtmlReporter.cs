@@ -3,6 +3,11 @@ using System.Text;
 using System.Text.Json;
 using CodeEvo.Core;
 using CodeEvo.Core.Models;
+using SixLabors.Fonts;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace CodeEvo.Reporting;
 
@@ -1441,7 +1446,8 @@ public class HtmlReporter
     /// <summary>
     /// Exports standalone SVG line-chart figures to <paramref name="outputDir"/>.
     /// Generates: entropy-over-time.svg, sloc-over-time.svg, sloc-per-file-over-time.svg,
-    /// and (when <paramref name="commitStats"/> is supplied) cc-over-time.svg and smell-over-time.svg.
+    /// and matching PNG files with the same base names.
+    /// Also generates (when <paramref name="commitStats"/> is supplied) cc-over-time and smell-over-time in both formats.
     /// </summary>
     public static void ExportSvgFigures(
         string outputDir,
@@ -1458,6 +1464,8 @@ public class HtmlReporter
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "entropy-over-time.svg"),
             BuildLineSvg(WithRepositoryName("Entropy Over Time", repositoryName), "Date", "Entropy Score", entropyPts, "#7c6af7"));
+        BuildLinePng(Path.Combine(outputDir, "entropy-over-time.png"),
+          WithRepositoryName("Entropy Over Time", repositoryName), "Date", "Entropy Score", entropyPts, "#7c6af7");
 
         var slocPts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1465,6 +1473,8 @@ public class HtmlReporter
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "sloc-over-time.svg"),
             BuildLineSvg(WithRepositoryName("SLOC Over Time", repositoryName), "Date", "SLOC", slocPts, "#22c55e"));
+        BuildLinePng(Path.Combine(outputDir, "sloc-over-time.png"),
+          WithRepositoryName("SLOC Over Time", repositoryName), "Date", "SLOC", slocPts, "#22c55e");
 
         var slocPerFilePts = sampled
             .Select(h => (h.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1472,6 +1482,8 @@ public class HtmlReporter
             .ToList();
         File.WriteAllText(Path.Combine(outputDir, "sloc-per-file-over-time.svg"),
             BuildLineSvg(WithRepositoryName("SLOC per File Over Time", repositoryName), "Date", "SLOC / File", slocPerFilePts, "#f59e0b"));
+        BuildLinePng(Path.Combine(outputDir, "sloc-per-file-over-time.png"),
+          WithRepositoryName("SLOC per File Over Time", repositoryName), "Date", "SLOC / File", slocPerFilePts, "#f59e0b");
 
         if (commitStats is { Count: > 0 })
         {
@@ -1483,6 +1495,8 @@ public class HtmlReporter
                 .ToList();
             File.WriteAllText(Path.Combine(outputDir, "cc-over-time.svg"),
                 BuildLineSvg(WithRepositoryName("Avg Cyclomatic Complexity Over Time", repositoryName), "Date", "Avg CC", ccPts, "#ef4444"));
+            BuildLinePng(Path.Combine(outputDir, "cc-over-time.png"),
+              WithRepositoryName("Avg Cyclomatic Complexity Over Time", repositoryName), "Date", "Avg CC", ccPts, "#ef4444");
 
             var smellPts = sampledStats
                 .Select(s => (s.Commit.Timestamp.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -1490,6 +1504,8 @@ public class HtmlReporter
                 .ToList();
             File.WriteAllText(Path.Combine(outputDir, "smell-over-time.svg"),
                 BuildLineSvg(WithRepositoryName("Avg Smell Score Over Time", repositoryName), "Date", "Avg Smell", smellPts, "#a855f7"));
+            BuildLinePng(Path.Combine(outputDir, "smell-over-time.png"),
+              WithRepositoryName("Avg Smell Score Over Time", repositoryName), "Date", "Avg Smell", smellPts, "#a855f7");
         }
     }
 
@@ -1524,7 +1540,8 @@ public class HtmlReporter
         int tickCount = 5;
         double rawStep = (maxV - minV) / (tickCount - 1);
         double mag = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
-        double niceStep = rawStep / mag switch { <= 1 => 1, <= 2 => 2, <= 5 => 5, _ => 10 } * mag;
+        double stepNorm = rawStep / mag;
+        double niceStep = (stepNorm switch { <= 1 => 1, <= 2 => 2, <= 5 => 5, _ => 10 }) * mag;
         double yAxisMin = Math.Floor(minV / niceStep) * niceStep;
         double yAxisMax = Math.Ceiling(maxV / niceStep) * niceStep;
         if (Math.Abs(yAxisMax - yAxisMin) < 1e-12) yAxisMax = yAxisMin + niceStep;
@@ -1553,18 +1570,19 @@ public class HtmlReporter
         sb.Append($"""<text x="{padL + chartW / 2}" y="{H - 8}" text-anchor="middle" fill="#888" font-family="Segoe UI,sans-serif" font-size="12">{EscapeHtml(xLabel)}</text>""");
 
         // Grid lines + Y-axis ticks
-        // Format: values ≥ 1 000 are shown as "Xk", values ≥ 1 use one decimal, smaller values use four decimals (e.g. entropy scores like 0.0012)
+        // Format: values ≥ 1 000 use grouped integers (e.g. 30,151), values ≥ 1 use one decimal,
+        // smaller values use four decimals (e.g. entropy scores like 0.0012).
         const double ThousandsThreshold = 1_000;
-        const double DecimalThreshold   = 1;
+        const double DecimalThreshold = 1;
         int gridSteps = tickCount;
         for (int t = 0; t <= gridSteps; t++)
         {
             double v = yAxisMin + t * (yAxisMax - yAxisMin) / gridSteps;
             double sy = Py(v);
             sb.Append($"""<line x1="{padL}" y1="{FormatInvariantF1(sy)}" x2="{padL + chartW}" y2="{FormatInvariantF1(sy)}" stroke="#2d3044" stroke-width="1"/>""");
-            string tickLbl = v >= ThousandsThreshold ? (v / ThousandsThreshold).ToString("F1", CultureInfo.InvariantCulture) + "k"
-                           : v >= DecimalThreshold   ? v.ToString("F1", CultureInfo.InvariantCulture)
-                           :                           v.ToString("F4", CultureInfo.InvariantCulture);
+            string tickLbl = v >= ThousandsThreshold ? v.ToString("N0", CultureInfo.InvariantCulture)
+                           : v >= DecimalThreshold ? v.ToString("F1", CultureInfo.InvariantCulture)
+                           : v.ToString("F4", CultureInfo.InvariantCulture);
             sb.Append($"""<text x="{padL - 6}" y="{FormatInvariantF1(sy + 4)}" text-anchor="end" fill="#888" font-family="Segoe UI,sans-serif" font-size="11">{EscapeHtml(tickLbl)}</text>""");
         }
 
@@ -1603,6 +1621,117 @@ public class HtmlReporter
         sb.Append("</svg>");
         return sb.ToString();
     }
+
+      private static void BuildLinePng(
+        string outputPath,
+        string title,
+        string xLabel,
+        string yLabel,
+        IReadOnlyList<(string Label, double Value)> points,
+        string lineColor)
+      {
+        const int W = 900, H = 420;
+        const int padL = 72, padR = 30, padT = 50, padB = 60;
+        int chartW = W - padL - padR;
+        int chartH = H - padT - padB;
+
+        using var img = new Image<Rgba32>(W, H);
+        img.Mutate(ctx =>
+        {
+          ctx.Fill(Color.ParseHex("#0f1117"));
+
+          if (points.Count == 0)
+          {
+            DrawChartText(ctx, title + " — no data", 16, Color.ParseHex("#888"), new PointF(W / 2f - 100f, H / 2f));
+            return;
+          }
+
+          double minV = points.Min(p => p.Value);
+          double maxV = points.Max(p => p.Value);
+          if (Math.Abs(maxV - minV) < 1e-12) { minV -= 1; maxV += 1; }
+
+          int tickCount = 5;
+          double rawStep = (maxV - minV) / (tickCount - 1);
+          double mag = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
+          double stepNorm = rawStep / mag;
+          double niceStep = (stepNorm switch { <= 1 => 1, <= 2 => 2, <= 5 => 5, _ => 10 }) * mag;
+          double yAxisMin = Math.Floor(minV / niceStep) * niceStep;
+          double yAxisMax = Math.Ceiling(maxV / niceStep) * niceStep;
+          if (Math.Abs(yAxisMax - yAxisMin) < 1e-12) yAxisMax = yAxisMin + niceStep;
+
+          double xScale = (double)chartW / Math.Max(1, points.Count - 1);
+          double yScale = chartH / (yAxisMax - yAxisMin);
+          float Px(int i) => (float)(padL + i * xScale);
+          float Py(double v) => (float)(padT + chartH - (v - yAxisMin) * yScale);
+
+          var gridColor = Color.ParseHex("#2d3044");
+          var axisColor = Color.ParseHex("#888888");
+          var textColor = Color.ParseHex("#888888");
+
+          DrawChartText(ctx, title, 18, Color.ParseHex("#e0e0e0"), new PointF(W / 2f - 150f, 10));
+          DrawChartText(ctx, xLabel, 12, textColor, new PointF(padL + chartW / 2f - 20f, H - 20));
+          DrawChartText(ctx, yLabel, 12, textColor, new PointF(8f, 8f));
+
+          const double ThousandsThreshold = 1_000;
+          const double DecimalThreshold = 1;
+          for (int t = 0; t <= tickCount; t++)
+          {
+            double v = yAxisMin + t * (yAxisMax - yAxisMin) / tickCount;
+            float sy = Py(v);
+            ctx.DrawLine(gridColor, 1f, new PointF(padL, sy), new PointF(padL + chartW, sy));
+            string tickLbl = v >= ThousandsThreshold ? v.ToString("N0", CultureInfo.InvariantCulture)
+                     : v >= DecimalThreshold ? v.ToString("F1", CultureInfo.InvariantCulture)
+                     : v.ToString("F4", CultureInfo.InvariantCulture);
+            DrawChartText(ctx, tickLbl, 11, textColor, new PointF(6f, sy - 8f));
+          }
+
+          int xTickCount = Math.Min(10, points.Count);
+          double xTickStep = (double)(points.Count - 1) / Math.Max(1, xTickCount - 1);
+          for (int t = 0; t < xTickCount; t++)
+          {
+            int idx = (int)Math.Round(t * xTickStep);
+            if (idx >= points.Count) idx = points.Count - 1;
+            float sx = Px(idx);
+            DrawChartText(ctx, points[idx].Label, 11, textColor, new PointF(sx - 35f, padT + chartH + 18f));
+          }
+
+          ctx.DrawLine(axisColor, 1f, new PointF(padL, padT), new PointF(padL, padT + chartH));
+          ctx.DrawLine(axisColor, 1f, new PointF(padL, padT + chartH), new PointF(padL + chartW, padT + chartH));
+
+          var stroke = Color.ParseHex(lineColor);
+          var fill = stroke.WithAlpha(0.2f);
+
+          var polygon = new PointF[points.Count + 2];
+          polygon[0] = new PointF(Px(0), padT + chartH);
+          for (int i = 0; i < points.Count; i++)
+            polygon[i + 1] = new PointF(Px(i), Py(points[i].Value));
+          polygon[^1] = new PointF(Px(points.Count - 1), padT + chartH);
+          ctx.FillPolygon(fill, polygon);
+
+          for (int i = 0; i < points.Count - 1; i++)
+          {
+            ctx.DrawLine(stroke, 2f,
+              new PointF(Px(i), Py(points[i].Value)),
+              new PointF(Px(i + 1), Py(points[i + 1].Value)));
+          }
+        });
+
+        img.SaveAsPng(outputPath);
+      }
+
+      private static void DrawChartText(IImageProcessingContext ctx, string text, float size, Color color, PointF position)
+      {
+        if (!SystemFonts.TryGet("Arial", out var family) &&
+          !SystemFonts.TryGet("DejaVu Sans", out family) &&
+          !SystemFonts.TryGet("Liberation Sans", out family))
+        {
+          return;
+        }
+
+        var font = family.CreateFont(size, FontStyle.Regular);
+        var options = new RichTextOptions(font) { Origin = position };
+        ctx.DrawText(options, text, color);
+      }
 
     /// <summary>
     /// Serializes an ad hoc (non-git) scan as a snapshot JSON string.
