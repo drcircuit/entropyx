@@ -113,6 +113,31 @@ public class HtmlReporterTests
         Assert.Contains("EntropyX Report — entropyx", html);
     }
 
+    [Fact]
+    public void Generate_WithRepositoryUrl_IncludesUrlSubheading()
+    {
+        var reporter = new HtmlReporter();
+        var history = new List<(CommitInfo, RepoMetrics)>
+        {
+            (MakeCommit("aaa1", 0), MakeRepoMetrics("aaa1", 0.7)),
+        };
+
+        var html = reporter.Generate(history, [], repositoryName: "entropyx", repositoryUrl: "https://github.com/drcircuit/entropyx");
+
+        Assert.Contains("Repo URL:", html);
+        Assert.Contains("https://github.com/drcircuit/entropyx", html);
+    }
+
+    [Fact]
+    public void Generate_IncludesPrintStyles()
+    {
+        var reporter = new HtmlReporter();
+
+        var html = reporter.Generate([], []);
+
+        Assert.Contains("@media print", html);
+    }
+
     // ── ComputeDeltas ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -583,6 +608,19 @@ public class HtmlReporterTests
     }
 
     [Fact]
+    public void GenerateDrilldown_WithRepositoryUrl_IncludesUrlSubheading()
+    {
+        var reporter = new HtmlReporter();
+        var commit  = MakeCommit("repo1");
+        var metrics = MakeRepoMetrics("repo1", 0.8);
+
+        var html = reporter.GenerateDrilldown(commit, metrics, [], [], null, "entropyx", "git@github.com:drcircuit/entropyx.git");
+
+        Assert.Contains("Repo URL:", html);
+        Assert.Contains("git@github.com:drcircuit/entropyx.git", html);
+    }
+
+    [Fact]
     public void GenerateDrilldown_GradeExcellent_WhenEntropyBelowThreshold()
     {
         var reporter = new HtmlReporter();
@@ -872,6 +910,19 @@ public class HtmlReporterTests
         var html = reporter.GenerateRefactorReport(files, scores, "sloc,cc");
 
         Assert.Contains("sloc,cc", html);
+    }
+
+    [Fact]
+    public void GenerateRefactorReport_WithRepositoryNameAndUrl_ShowsBothInHeader()
+    {
+        var reporter = new HtmlReporter();
+        var files = new List<FileMetrics> { MakeFileMetrics("a.cs", sloc: 100) };
+        double[] scores = [0.5];
+
+        var html = reporter.GenerateRefactorReport(files, scores, "sloc,cc", repositoryName: "entropyx", repositoryUrl: "https://github.com/drcircuit/entropyx");
+
+        Assert.Contains("EntropyX Refactor Report — entropyx", html);
+        Assert.Contains("Repo URL:", html);
     }
 
     [Fact]

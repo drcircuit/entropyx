@@ -11,7 +11,7 @@ internal static class ScanDetailsCommandHandler
 {
     internal static void Handle(string repoPath, string dbPath, string? htmlPath)
     {
-        var repositoryName = Path.GetFileName(repoPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var (repositoryName, repositoryUrl) = GitTraversal.GetRepoInfo(repoPath);
         var pipeline  = new ScanPipeline(new LizardAnalyzer());
         var reporter  = new ConsoleReporter();
         var traversal = new GitTraversal();
@@ -73,7 +73,7 @@ internal static class ScanDetailsCommandHandler
                 .Start("Generating HTML drilldown report...", _ =>
                 {
                     var htmlReporter = new HtmlReporter();
-                    var html = htmlReporter.GenerateDrilldown(headCommit, repoMetrics, files, history, prevMetrics, repositoryName);
+                    var html = htmlReporter.GenerateDrilldown(headCommit, repoMetrics, files, history, prevMetrics, repositoryName, repositoryUrl);
                     File.WriteAllText(htmlPath, html);
                 });
             AnsiConsole.MarkupLine($"[green]✓[/] HTML drilldown report written to [cyan]{Markup.Escape(htmlPath)}[/]");
