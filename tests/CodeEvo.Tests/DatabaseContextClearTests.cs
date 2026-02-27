@@ -109,4 +109,31 @@ public class DatabaseContextClearTests : IDisposable
         var repos = _db.GetAllRepos();
         Assert.Empty(repos);
     }
+
+    [Fact]
+    public void RepoMetricsRepository_GetAll_ReturnsCommitsInChronologicalOrder()
+    {
+        var commitRepo = new CommitRepository(_db);
+        var repoMetricsRepo = new RepoMetricsRepository(_db);
+
+        var oldest = new CommitInfo("aaa001", DateTimeOffset.UtcNow.AddDays(-10), []);
+        var middle = new CommitInfo("bbb002", DateTimeOffset.UtcNow.AddDays(-5), []);
+        var newest = new CommitInfo("ccc003", DateTimeOffset.UtcNow.AddDays(-1), []);
+
+        // Insert commits in non-chronological order so alphabetical != chronological
+        commitRepo.Insert(newest);
+        commitRepo.Insert(oldest);
+        commitRepo.Insert(middle);
+
+        repoMetricsRepo.Insert(new RepoMetrics("ccc003", 3, 300, 0.3));
+        repoMetricsRepo.Insert(new RepoMetrics("aaa001", 1, 100, 0.1));
+        repoMetricsRepo.Insert(new RepoMetrics("bbb002", 2, 200, 0.2));
+
+        var result = repoMetricsRepo.GetAll();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("aaa001", result[0].CommitHash);
+        Assert.Equal("bbb002", result[1].CommitHash);
+        Assert.Equal("ccc003", result[2].CommitHash);
+    }
 }

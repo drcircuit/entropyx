@@ -37,7 +37,12 @@ public class RepoMetricsRepository(DatabaseContext context)
         using var connection = context.OpenConnection();
         connection.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT CommitHash, TotalFiles, TotalSloc, EntropyScore FROM RepoMetrics ORDER BY CommitHash";
+        cmd.CommandText = """
+            SELECT rm.CommitHash, rm.TotalFiles, rm.TotalSloc, rm.EntropyScore
+            FROM RepoMetrics rm
+            LEFT JOIN Commits c ON c.Hash = rm.CommitHash
+            ORDER BY c.Timestamp IS NULL, c.Timestamp
+            """;
         var results = new List<RepoMetrics>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
