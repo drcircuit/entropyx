@@ -99,6 +99,7 @@ After publishing for your target platform, copy the binary into `/usr/local/bin`
 ```sh
 chmod +x entropyx
 mv ./entropyx /usr/local/bin/entropyx
+# if you get a permission error: sudo mv ./entropyx /usr/local/bin/entropyx
 ```
 
 Then verify installation and set up missing dependencies:
