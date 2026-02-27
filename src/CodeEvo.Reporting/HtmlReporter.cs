@@ -24,7 +24,8 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> latestFiles,
         IReadOnlyList<CommitFileStats>? commitStats = null,
         IReadOnlyList<FileMetrics>? prevFiles = null,
-        string? repositoryName = null)
+        string? repositoryName = null,
+        string? repositoryUrl = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -46,7 +47,7 @@ public class HtmlReporter
 
         double[] badness = latestFiles.Count > 0 ? EntropyCalculator.ComputeBadness(latestFiles) : [];
 
-        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles, repositoryName);
+        return BuildHtml(ordered, deltas, troubled, heroic, largeFiles, complexFiles, smellyFiles, coupledFiles, latestFiles, badness, commitStats, prevFiles, repositoryName, repositoryUrl);
     }
 
     public record CommitDelta(CommitInfo Commit, RepoMetrics Metrics, double Delta, double RelativeDelta, int SlocDelta = 0, int FilesDelta = 0);
@@ -63,7 +64,9 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> files,
         double[] scores,
         string focus,
-        int topN = 10)
+        int topN = 10,
+        string? repositoryName = null,
+        string? repositoryUrl = null)
     {
         var ranked = files.Zip(scores)
             .OrderByDescending(x => x.Second)
@@ -74,7 +77,7 @@ public class HtmlReporter
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
         AppendHtmlHeader(sb, reportDate);
-        AppendRefactorHeader(sb, focus, topN, reportDate);
+        AppendRefactorHeader(sb, focus, topN, reportDate, repositoryName, repositoryUrl);
         AppendRefactorTable(sb, ranked);
         AppendRefactorChart(sb, ranked, focus);
         AppendHtmlFooter(sb);
@@ -82,13 +85,18 @@ public class HtmlReporter
         return sb.ToString();
     }
 
-    private static void AppendRefactorHeader(StringBuilder sb, string focus, int topN, string reportDate)
+    private static void AppendRefactorHeader(StringBuilder sb, string focus, int topN, string reportDate, string? repositoryName, string? repositoryUrl)
     {
+        var title = string.IsNullOrWhiteSpace(repositoryName)
+            ? "🔧 EntropyX Refactor Report"
+            : $"🔧 EntropyX Refactor Report — {EscapeHtml(repositoryName)}";
+        var repositorySubtitle = BuildRepositoryUrlSubtitle(repositoryUrl);
         sb.AppendLine($$"""
               <header>
                 <div>
-                  <h1>🔧 EntropyX Refactor Report</h1>
+                  <h1>{{title}}</h1>
                   <div class="subtitle">Top {{topN}} files by <strong style="color:var(--accent)">{{EscapeHtml(focus)}}</strong> &nbsp;·&nbsp; Generated {{reportDate}}</div>
+                  {{repositorySubtitle}}
                 </div>
               </header>
               <div class="container">
@@ -216,7 +224,8 @@ public class HtmlReporter
         IReadOnlyList<FileMetrics> files,
         IReadOnlyList<(CommitInfo Commit, RepoMetrics Metrics)> history,
         RepoMetrics? previousMetrics,
-        string? repositoryName = null)
+        string? repositoryName = null,
+        string? repositoryUrl = null)
     {
         var ordered = history.OrderBy(h => h.Commit.Timestamp).ToList();
         var deltas = ComputeDeltas(ordered);
@@ -227,7 +236,7 @@ public class HtmlReporter
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
         AppendHtmlHeader(sb, reportDate, string.IsNullOrWhiteSpace(repositoryName) ? "EntropyX Drilldown Report" : $"{repositoryName} - EntropyX Drilldown Report");
-        AppendDrilldownHeader(sb, commit, metrics, reportDate, repositoryName);
+        AppendDrilldownHeader(sb, commit, metrics, reportDate, repositoryName, repositoryUrl);
         AppendDrilldownSummaryStats(sb, metrics, previousMetrics);
         var historicalScores = ordered.Select(h => h.Metrics.EntropyScore).ToList();
         AppendDrilldownAssessment(sb, metrics, previousMetrics, historicalScores);
@@ -241,7 +250,7 @@ public class HtmlReporter
         return sb.ToString();
     }
 
-    private static void AppendDrilldownHeader(StringBuilder sb, CommitInfo commit, RepoMetrics metrics, string reportDate, string? repositoryName)
+    private static void AppendDrilldownHeader(StringBuilder sb, CommitInfo commit, RepoMetrics metrics, string reportDate, string? repositoryName, string? repositoryUrl)
     {
         var hash = commit.Hash[..Math.Min(8, commit.Hash.Length)];
         var date = commit.Timestamp != DateTimeOffset.MinValue
@@ -251,11 +260,13 @@ public class HtmlReporter
         var title = string.IsNullOrWhiteSpace(repositoryName)
             ? "⚡ EntropyX Drilldown"
             : $"⚡ EntropyX Drilldown — {EscapeHtml(repositoryName)}";
+        var repositorySubtitle = BuildRepositoryUrlSubtitle(repositoryUrl);
         sb.AppendLine($$"""
               <header>
                 <div>
                   <h1>{{title}}</h1>
                   <div class="subtitle">Commit <code style="color:var(--accent)">{{EscapeHtml(hash)}}</code> &nbsp;·&nbsp; {{EscapeHtml(date)}} &nbsp;·&nbsp; Generated {{reportDate}}</div>
+                  {{repositorySubtitle}}
                 </div>
                 <div>{{badge}}</div>
               </header>
@@ -543,7 +554,8 @@ public class HtmlReporter
         double[] badness,
         IReadOnlyList<CommitFileStats>? commitStats = null,
         IReadOnlyList<FileMetrics>? prevFiles = null,
-        string? repositoryName = null)
+        string? repositoryName = null,
+        string? repositoryUrl = null)
     {
         var sb = new StringBuilder();
         var latest = ordered.Count > 0 ? ordered[^1].Metrics : null;
@@ -551,7 +563,7 @@ public class HtmlReporter
         var reportDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
         AppendHtmlHeader(sb, reportDate, string.IsNullOrWhiteSpace(repositoryName) ? "EntropyX Code Health Report" : $"{repositoryName} - EntropyX Code Health Report");
-        AppendSummarySection(sb, latest, ordered.Count, reportDate, repositoryName);
+        AppendSummarySection(sb, latest, ordered.Count, reportDate, repositoryName, repositoryUrl);
         AppendGaugesSection(sb, latest, latestFiles, ordered);
         AppendEntropyChart(sb, chartHistory);
         AppendGrowthChart(sb, chartHistory);
@@ -646,19 +658,31 @@ public class HtmlReporter
                 .heatmap-label { flex: 1; padding: 0 0.5rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
                 .heatmap-bar-wrap { width: 120px; min-width: 120px; background: rgba(255,255,255,.05); border-radius: 3px; height: 10px; overflow: hidden; }
                 .heatmap-bar { height: 100%; border-radius: 3px; }
+                .repo-url { font-size: 0.8rem; margin-top: 0.35rem; }
+                @media print {
+                  :root {
+                    --bg: #ffffff; --card: #ffffff; --border: #d4d4d8;
+                    --text: #111827; --muted: #4b5563; --accent: #4338ca;
+                  }
+                  body { background: var(--bg); color: var(--text); font-size: 12px; }
+                  .card, .chart-card { break-inside: avoid-page; }
+                  .chart-wrap, .gauge-wrap { height: 220px; }
+                  a { color: #1d4ed8; text-decoration: underline; }
+                }
               </style>
             </head>
             <body>
             """);
     }
 
-    private static void AppendSummarySection(StringBuilder sb, RepoMetrics? latest, int commitCount, string reportDate, string? repositoryName)
+    private static void AppendSummarySection(StringBuilder sb, RepoMetrics? latest, int commitCount, string reportDate, string? repositoryName, string? repositoryUrl)
     {
         string entropy = latest is not null ? latest.EntropyScore.ToString("F4", CultureInfo.InvariantCulture) : "—";
         string files = latest is not null ? latest.TotalFiles.ToString(CultureInfo.InvariantCulture) : "—";
         string sloc = latest is not null ? latest.TotalSloc.ToString("N0", CultureInfo.InvariantCulture) : "—";
         string badge = latest is not null ? EntropyBadgeSvg(latest.EntropyScore) : "";
 
+        var repositorySubtitle = BuildRepositoryUrlSubtitle(repositoryUrl);
         var title = string.IsNullOrWhiteSpace(repositoryName)
             ? "⚡ EntropyX Report"
             : $"⚡ EntropyX Report — {EscapeHtml(repositoryName)}";
@@ -667,6 +691,7 @@ public class HtmlReporter
                 <div>
                   <h1>{{title}}</h1>
                   <div class="subtitle">Generated {{reportDate}} &nbsp;·&nbsp; {{commitCount}} commit(s) analysed</div>
+                  {{repositorySubtitle}}
                 </div>
                 <div>{{badge}}</div>
               </header>
@@ -1889,6 +1914,21 @@ public class HtmlReporter
         > 5 => """<span class="badge badge-gray">Moderate</span>""",
         _ => """<span class="badge badge-green">Low</span>"""
     };
+
+    private static string BuildRepositoryUrlSubtitle(string? repositoryUrl)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryUrl))
+            return string.Empty;
+
+        var escaped = EscapeHtml(repositoryUrl);
+        if (repositoryUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || repositoryUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"""<div class="subtitle repo-url">Repo URL: <a href="{escaped}">{escaped}</a></div>""";
+        }
+
+        return $"""<div class="subtitle repo-url">Repo URL: <code style="color:var(--accent)">{escaped}</code></div>""";
+    }
 
     private static string EscapeHtml(string text) =>
         text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");

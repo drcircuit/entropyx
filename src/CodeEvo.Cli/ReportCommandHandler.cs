@@ -11,7 +11,7 @@ internal static class ReportCommandHandler
     internal static void Handle(
         string repoPath, string dbPath, string? commitHash, string? htmlPath, string kind, string? exportFiguresDir)
     {
-        var repositoryName = GetRepositoryName(repoPath);
+        var (repositoryName, repositoryUrl) = GetRepositoryInfo(repoPath);
         var reporter = new ConsoleReporter();
         var db = new DatabaseContext();
         db.Initialize(dbPath);
@@ -40,7 +40,7 @@ internal static class ReportCommandHandler
             AnsiConsole.Status()
                 .Spinner(Spinner.Known.Dots)
                 .Start("Generating HTML report...", _ =>
-                    WriteHtmlReport(allMetrics, commitRepo, fileMetricsRepo, htmlPath, kind, exportFiguresDir, repositoryName));
+                    WriteHtmlReport(allMetrics, commitRepo, fileMetricsRepo, htmlPath, kind, exportFiguresDir, repositoryName, repositoryUrl));
 
             AnsiConsole.MarkupLine($"[green]✓[/] HTML report written to [cyan]{Markup.Escape(htmlPath)}[/]");
             var jsonOutputPath = Path.ChangeExtension(htmlPath, ".json");
@@ -78,7 +78,8 @@ internal static class ReportCommandHandler
         string htmlPath,
         string kind,
         string? exportFiguresDir,
-        string repositoryName)
+        string repositoryName,
+        string repositoryUrl)
     {
         var (history, commitStats) = BuildHistoryAndStats(allMetrics, commitRepo, fileMetricsRepo, kind);
 
@@ -93,7 +94,7 @@ internal static class ReportCommandHandler
             prevFiles = CliHelpers.FilterByKind(fileMetricsRepo.GetByCommit(history[^2].Item1.Hash), kind);
 
         var htmlReporter = new HtmlReporter();
-        var html = htmlReporter.Generate(history, latestFiles, commitStats, prevFiles, repositoryName);
+        var html = htmlReporter.Generate(history, latestFiles, commitStats, prevFiles, repositoryName, repositoryUrl);
         File.WriteAllText(htmlPath, html);
 
         // Write data.json alongside the HTML for later comparison
@@ -105,10 +106,16 @@ internal static class ReportCommandHandler
             HtmlReporter.ExportSvgFigures(exportFiguresDir, history, commitStats, repositoryName);
     }
 
-    private static string GetRepositoryName(string repoPath)
+    private static (string Name, string Url) GetRepositoryInfo(string repoPath)
     {
+        if (GitTraversal.IsValidRepo(repoPath))
+        {
+            var (name, remoteUrl) = GitTraversal.GetRepoInfo(repoPath);
+            return (name, remoteUrl);
+        }
+
         var trimmed = repoPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return Path.GetFileName(trimmed);
+        return (Path.GetFileName(trimmed), string.Empty);
     }
 
     /// <summary>

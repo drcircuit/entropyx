@@ -258,12 +258,15 @@ refactorCommand.SetHandler((string path, string focus, int top, string? htmlPath
 
     if (htmlPath is not null)
     {
+        var (repositoryName, repositoryUrl) = GitTraversal.IsValidRepo(path)
+            ? GitTraversal.GetRepoInfo(path)
+            : (Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), string.Empty);
         AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .Start($"Generating HTML refactor report → {htmlPath}...", _ =>
             {
                 var htmlReporter = new HtmlReporter();
-                var html = htmlReporter.GenerateRefactorReport(display, scores, focus, top);
+                var html = htmlReporter.GenerateRefactorReport(display, scores, focus, top, repositoryName, repositoryUrl);
                 File.WriteAllText(htmlPath, html);
             });
         AnsiConsole.MarkupLine($"[green]✓[/] HTML refactor report written to [cyan]{Markup.Escape(htmlPath)}[/]");
