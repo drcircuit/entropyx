@@ -97,14 +97,22 @@ You can copy it to any directory on your `PATH` to use it globally.
 After publishing for your target platform, copy the binary into `/usr/local/bin` so it is available from any directory:
 
 ```sh
-sudo install -m 0755 out/linux-x64/entropyx /usr/local/bin/entropyx
-# or: sudo install -m 0755 out/osx-arm64/entropyx /usr/local/bin/entropyx
+chmod +x entropyx
+mv ./entropyx /usr/local/bin/entropyx
 ```
 
 Then verify installation and set up missing dependencies:
 
 ```sh
 entropyx check tools
+```
+
+If you're on macOS and dependencies are missing, install them with Homebrew:
+
+```sh
+brew install python
+brew install cloc
+brew install lizard-analyzer
 ```
 
 ---
